@@ -123,20 +123,124 @@ build plan are in AI_Merchant_Growth_Agent_Build_Plan.md.
   score and the specific reason behind it" — verified true on 500 real
   baskets. Phase 2 is done.
 
-## Next: Phase 3 (agent layer and agent-readable catalogue)
+## Phase 3 (agent layer and agent-readable catalogue): DONE
 
-Per the build plan: one thin, agent-readable catalogue endpoint (plain
-JSON — product id, price, availability, attributes, declared
-complements/alternatives, current offers, a checkout-capability
-marker), queryable in natural language. A Merchant Agent behind it
-that interprets a buyer request, picks the base product from the
-catalogue, calls this decision engine (decide()) for the growth
-decision, and presents whatever it returns (including no action) for
-accept/decline. A minimal Buyer Agent alongside it (one tool: query the
-catalogue in natural language) so the demo is agent-to-agent, not a
-human clicking a UI. Cart state tracked as an explicit before/after
-pair from here on, for the Phase 7 dashboard. No money moves yet —
-that's Phase 4. Guardrail: no OAuth delegated-auth flows, no
-cryptographic mandates, no .well-known discovery stack, no full ACP/UCP
-conformance attempt — the one correctly-shaped JSON endpoint is the
-entire buyer-readiness commitment.
+Verified directly against the build plan's own exit line: "a scripted
+natural-language request produces a correct catalogue match, a growth
+decision from the engine (with at least one rehearsed run that
+resolves to no action, to prove the policy isn't just an always-upsell
+reflex), and an updated cart, all without any money changing hands
+yet."
+
+Architecture: LangGraph (StateGraph orchestration, create_react_agent
+for each agent's own tool-use loop) against the raw Anthropic API via
+langchain-anthropic, not the Claude Agent SDK. Model id
+`claude-sonnet-5`, verified against the docs before hardcoding it,
+configurable via ANTHROPIC_MODEL.
+
+- src/catalogue/catalogue.py: the catalogue's data layer. Filters out
+  637 non-product rows (unclassified NO COMMODITY/SUBCOMMODITY rows,
+  FUEL, coupon-bookkeeping pseudo-categories, bottle deposits) verified
+  against the real category list first. 91,357 real products remain.
+  search(query) does token-overlap matching against category/
+  subcommodity TEXT only, which cannot resolve a bare product_id (see
+  the bug in run 2 below).
+- src/catalogue/catalogue_api.py: the one thin agent-readable
+  catalogue endpoint the plan asks for, plain FastAPI, two routes
+  (/catalogue/search, /catalogue/product/{id}), tested via TestClient.
+- src/agents/tools.py: query_catalogue, get_product, and
+  get_growth_decision as LangChain tools. get_growth_decision wraps
+  engine.decide() with zero duplicated logic; get_product wraps
+  catalogue.build_entry() directly, added after run 2's bug.
+- src/agents/buyer_agent.py: one tool only (query_catalogue), per the
+  plan's spec. Plain-text prompt (no markdown, no emoji, no
+  exclamation points) after run 1 showed sales-pitch tone leaking in.
+- src/agents/merchant_agent.py: three tools (query_catalogue,
+  get_product, get_growth_decision). Told never to invent a product,
+  price, or offer, to state no_action plainly, and to call get_product
+  first for any buyer-stated product_id, since query_catalogue only
+  matches text and can't confirm a bare id. Also plain-text, no
+  markdown, no emoji, no sales tone, since the reply is a logged
+  record for the dashboard, not a chat message.
+- src/agents/demo_graph.py: the top-level LangGraph StateGraph,
+  buyer -> merchant -> resolve. resolve_node is a seeded random draw
+  against p_accept to produce a cart-before/cart-after diff and an
+  accept/decline outcome, explicitly a Phase 3 placeholder only, not
+  Phase 5's real experiment engine. Handles no_action and a missing
+  decision without crashing. Takes --household-key/--intent/--seed.
+
+**Live runs, all verified against real data (5 total, real API calls,
+user's own key):**
+
+1. household_key=1, "spaghetti for dinner tonight": worked end to
+   end, cross_sell to Beef accepted, but the merchant reply had
+   emoji, markdown bold, and sales-pitch language (fixed by tightening
+   both prompts).
+2. Same scenario rerun: a real bug surfaced. The merchant agent said
+   product_id 5995213 "does not exist in our catalogue," which is
+   false, confirmed directly against catalogue.build_entry(5995213).
+   Root cause: query_catalogue only matches category/subcommodity
+   TEXT, never a numeric product_id, and a text search for "spaghetti"
+   doesn't surface 5995213 because its real category is Hispanic/
+   authentic pasta. The merchant agent had no tool that could confirm
+   a bare product_id the buyer already named, and correctly refused to
+   guess rather than fabricate a match. Fixed with the get_product
+   tool and the prompt sequencing above.
+3. household_key=500, "I need toothpaste": fully accurate. Toothpaste
+   (7085339, $0.69) confirmed, cross_sell to fluid milk (995242)
+   offered at 47% co-purchase rate, 1.9 lift, 40% p_accept, $0.028
+   expected value, all checked against real data. Offer accepted.
+4. household_key=1200, "I want orange juice": fully accurate. Orange
+   juice (1905462, $0.89) confirmed, cross_sell to Cold Cereal
+   (1054262) offered at 29% co-purchase rate, 3.2x lift, 31% p_accept,
+   $0.009 expected value, all checked against real data. Offer
+   declined.
+5. household_key=1, "I need cigarettes": the genuine no_action run
+   the exit line asks for. Cigarettes (1015476, $2.00) confirmed, an
+   upsell to 1091997 ($2.36) was evaluated and rejected because its
+   expected value came out negative (-$0.14), so no offer was made.
+   Reran engine.decide(1, [1015476]) directly and confirmed the exact
+   same expected value (-0.1424..., rounds to -$0.14) and both product
+   ids/prices, matching the merchant's reply precisely. This is an
+   engine-level no_action, the upsell was evaluated and rejected on
+   its own merits, not a tool failure, which is exactly what the exit
+   line is checking for.
+
+All three exit-line conditions hold (catalogue match, growth decision
+including a verified no_action, updated cart) with no money changing
+hands anywhere in this phase. Guardrail respected: no OAuth
+delegated-auth flows, no cryptographic mandates, no .well-known
+discovery stack, no full ACP/UCP conformance attempt, one JSON
+endpoint only.
+
+Left open, not blocking, revisit around Phase 7/8: whether the Buyer
+Agent's intent per demo run should be scripted/fixed for the pitch
+rehearsal or left open-ended.
+
+## Phase 4 (Razorpay Test Mode integration): not started
+
+Turns an accepted offer into a real, verifiable Test Mode transaction.
+Per the plan: create a Razorpay Order via the Orders API for the final
+basket amount in paise (basket metadata in receipt/notes), made
+through the official Razorpay MCP Server's tools (create_order,
+create_payment_link, fetch_payment, capture), not hand-rolled REST
+calls. Standard Checkout completes against the mock bank/UPI page,
+returns razorpay_order_id/razorpay_payment_id/razorpay_signature; the
+server verifies that signature with HMAC-SHA256 before treating the
+payment as legitimate, then captures (or confirms auto-capture) and
+fetches to confirm final status. One webhook listener for
+payment.captured, verifying the x-razorpay-signature header. A second,
+deliberate path uses the "failure@razorpay" mock UPI identifier to
+force a decline, handled gracefully: a clear message, no half-updated
+cart or order state, a logged failed attempt in the audit trail. A
+spend cap enforced here is the concrete "bounded" mechanism. Phase
+ends with one successful and one deliberately failed Test Mode
+payment, both traceable back to the specific agent decision that
+triggered them. Guardrail: borrow only the concept of a signed,
+bounded authorization record for the audit log, not the AP2
+specification itself, and stay entirely in Test Mode, no Live Mode
+keys anywhere near this build.
+
+Before any code: a Razorpay Test Mode account and Test API keys
+(that's real account setup, the user's to do), and a decision on
+hosted vs self-hosted Docker for the official Razorpay MCP Server.
