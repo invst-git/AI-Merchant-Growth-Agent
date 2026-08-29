@@ -1,16 +1,3 @@
-"""
-Phase 0 connectivity check.
-
-Confirms the Razorpay Test Mode account + API keys actually work end to
-end: creates a small test order, fetches it back, and prints the result.
-Does not print RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET anywhere.
-
-Usage:
-    pip install -r requirements.txt
-    cp .env.example .env   # then fill in your real test keys
-    python scripts/test_razorpay_connection.py
-"""
-
 import os
 import sys
 
@@ -23,19 +10,11 @@ key_id = os.getenv("RAZORPAY_KEY_ID")
 key_secret = os.getenv("RAZORPAY_KEY_SECRET")
 
 if not key_id or not key_secret or "xxxx" in key_id:
-    print(
-        "RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET are not set. "
-        "Copy .env.example to .env and fill in your real test keys.",
-        file=sys.stderr,
-    )
+    print("RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET are not set. ""Copy .env.example to .env and fill in your real test keys.",file=sys.stderr,)
     sys.exit(1)
 
 if not key_id.startswith("rzp_test_"):
-    print(
-        f"Warning: key id does not start with 'rzp_test_' — "
-        f"make sure you're using Test Mode keys, not Live Mode.",
-        file=sys.stderr,
-    )
+    print(f"Warning: key id does not start with 'rzp_test_' - "f"make sure you're using Test Mode keys, not Live Mode.",file=sys.stderr,)
 
 client = razorpay.Client(auth=(key_id, key_secret))
 
@@ -53,4 +32,4 @@ print(f"Order created: id={order['id']} status={order['status']} amount={order['
 fetched = client.order.fetch(order["id"])
 print(f"Order fetched back: id={fetched['id']} status={fetched['status']}")
 
-print("\nConnection OK — Test Mode account and API keys are working.")
+print("\nConnection OK - Test Mode account and API keys are working.")

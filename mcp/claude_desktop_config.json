@@ -6,7 +6,7 @@
         "mcp-remote",
         "https://mcp.razorpay.com/mcp",
         "--header",
-        "Authorization: Basic <base64-key:secret>"
+        "Authorization: Basic cnpwX3Rlc3RfVFVrWk9kdG9ybVY2cngNOnY3N2t5MHZiVnJraXVpZE9xSW1ybXNiaw0="
       ]
     }
   }

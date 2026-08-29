@@ -1,7 +1,3 @@
-#!/usr/bin/env bash
-# Run this yourself, locally: it reads RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET
-# from .env (never printing the secret) and prints only the base64 string
-# to paste into mcp/claude_desktop_config.example.json.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 if [ ! -f .env ]; then
