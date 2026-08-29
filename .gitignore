@@ -1,0 +1,12 @@
+.env
+*.pem
+__pycache__/
+*.pyc
+.venv/
+venv/
+node_modules/
+data/raw/*
+data/processed/*
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+*.log
