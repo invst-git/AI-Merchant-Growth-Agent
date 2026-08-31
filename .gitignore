@@ -5,11 +5,12 @@ __pycache__/
 .venv/
 venv/
 node_modules/
+data/
 data/raw/*
 data/processed/*
 !data/raw/.gitkeep
 !data/processed/.gitkeep
 *.log
-# trained model artifacts, regenerate from data_prep + src/decision_engine scripts
 models/*
 !models/.gitkeep
+docs/

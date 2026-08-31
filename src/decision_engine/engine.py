@@ -146,7 +146,15 @@ UPSELL_EXPLAINER = build_explainer(UPSELL_PROPENSITY, build_upsell_background())
 def top_feature_drivers(explainer, pipeline, features, categorical_features, numeric_features, bool_features, row_df):
     preprocess = pipeline.named_steps["preprocess"]
     transformed = preprocess.transform(row_df[features])
-    values = explainer(transformed).values[0]
+    try:
+        values = explainer(transformed).values[0]
+    except shap.utils._exceptions.ExplainerError:
+        # HistGradientBoostingClassifier + TreeExplainer occasionally fails SHAP's
+        # additivity check (a documented SHAP/sklearn compatibility quirk, not a
+        # correctness issue with our features). SHAP's own error message suggests
+        # this exact mitigation; verified against the real failing case
+        # (household_key=2445, basket_id=27841106542) to produce valid attributions.
+        values = explainer(transformed, check_additivity=False).values[0]
 
     onehot_names = list(preprocess.named_transformers_["cat"].get_feature_names_out(categorical_features))
     names = onehot_names + numeric_features + bool_features
@@ -166,7 +174,7 @@ def format_drivers(drivers):
 
 # --- cross-sell -------------------------------------------------------
 
-def cross_sell_candidates(household_key, basket_product_ids):
+def cross_sell_candidates(household_key, basket_product_ids, explain_drivers=True):
     commodities = basket_commodities(basket_product_ids)
     if not commodities:
         return []
@@ -194,10 +202,24 @@ def cross_sell_candidates(household_key, basket_product_ids):
         }])
         p_accept = float(ACCEPTANCE["model"].predict_proba(row[ACCEPTANCE["features"]])[0, 1])
         incremental_value = float(product["price"])
-        drivers = top_feature_drivers(
-            ACCEPTANCE_EXPLAINER, ACCEPTANCE["model"], ACCEPTANCE["features"],
-            CROSS_SELL_CATEGORICAL, CROSS_SELL_NUMERIC, CROSS_SELL_BOOL, row,
-        )
+        if explain_drivers:
+            drivers = top_feature_drivers(
+                ACCEPTANCE_EXPLAINER, ACCEPTANCE["model"], ACCEPTANCE["features"],
+                CROSS_SELL_CATEGORICAL, CROSS_SELL_NUMERIC, CROSS_SELL_BOOL, row,
+            )
+            reason = (
+                f"customers who buy {rule['antecedent'].title()} buy "
+                f"{rule['consequent'].title()} {rule['confidence']:.0%} of the time "
+                f"(lift {rule['lift']:.1f}); estimated accept probability {p_accept:.0%} "
+                f"({model_type}-trained acceptance model; top drivers: {format_drivers(drivers)}); "
+                f"{explain(p_accept, incremental_value)}"
+            )
+        else:
+            # Phase 5 bulk simulation path: SHAP is ~half the per-candidate
+            # cost (see module docstring) and unused for aggregate stats,
+            # skip it rather than compute and discard it thousands of times.
+            drivers = []
+            reason = None
         candidates.append({
             "action": "cross_sell",
             "product_id": int(product["product_id"]),
@@ -207,20 +229,14 @@ def cross_sell_candidates(household_key, basket_product_ids):
             "incremental_value": incremental_value,
             "expected_value": score(p_accept, incremental_value),
             "feature_attribution": drivers,
-            "reason": (
-                f"customers who buy {rule['antecedent'].title()} buy "
-                f"{rule['consequent'].title()} {rule['confidence']:.0%} of the time "
-                f"(lift {rule['lift']:.1f}); estimated accept probability {p_accept:.0%} "
-                f"({model_type}-trained acceptance model; top drivers: {format_drivers(drivers)}); "
-                f"{explain(p_accept, incremental_value)}"
-            ),
+            "reason": reason,
         })
     return candidates
 
 
 # --- upsell -------------------------------------------------------
 
-def upsell_propensity_factor(hh, trade_up_rate, national_brand_rate, same_manufacturer_flag):
+def upsell_propensity_factor(hh, trade_up_rate, national_brand_rate, same_manufacturer_flag, explain_drivers=True):
     row = pd.DataFrame([{
         "trade_up_rate_other": trade_up_rate,
         "national_brand_rate_other": national_brand_rate,
@@ -237,10 +253,13 @@ def upsell_propensity_factor(hh, trade_up_rate, national_brand_rate, same_manufa
     p_top_tier = float(UPSELL_PROPENSITY["model"].predict_proba(row[features])[0, 1])
     base_rate = UPSELL_PROPENSITY["base_rate"]
     propensity_factor = min(2.0, max(0.5, p_top_tier / base_rate))
-    drivers = top_feature_drivers(
-        UPSELL_EXPLAINER, UPSELL_PROPENSITY["model"], features,
-        UPSELL_CATEGORICAL, UPSELL_NUMERIC, UPSELL_BOOL, row,
-    )
+    if explain_drivers:
+        drivers = top_feature_drivers(
+            UPSELL_EXPLAINER, UPSELL_PROPENSITY["model"], features,
+            UPSELL_CATEGORICAL, UPSELL_NUMERIC, UPSELL_BOOL, row,
+        )
+    else:
+        drivers = []
     return propensity_factor, drivers
 
 
@@ -251,7 +270,7 @@ def upsell_p_accept(price_ratio, propensity_factor):
     return max(0.02, min(0.6, base * propensity_factor))
 
 
-def upsell_candidates(household_key, basket_product_ids):
+def upsell_candidates(household_key, basket_product_ids, explain_drivers=True):
     hh = household_row(household_key)
     trade_up_rate, national_brand_rate = household_brand_row(household_key)
     model_type = UPSELL_PROPENSITY.get("model_type", "logistic")
@@ -267,12 +286,23 @@ def upsell_candidates(household_key, basket_product_ids):
         manufacturer_match = same_manufacturer_as_usual(
             household_key, tier["sub_commodity_desc"], tier["upsell_manufacturer"]
         )
-        propensity_factor, drivers = upsell_propensity_factor(hh, trade_up_rate, national_brand_rate, manufacturer_match)
+        propensity_factor, drivers = upsell_propensity_factor(
+            hh, trade_up_rate, national_brand_rate, manufacturer_match, explain_drivers=explain_drivers
+        )
         price_ratio = tier["upsell_price"] / tier["price"]
         p_accept = upsell_p_accept(price_ratio, propensity_factor)
         incremental_value = float(tier["price_delta"])
 
-        brand_note = "same manufacturer as the item in cart" if tier["same_manufacturer"] else "different manufacturer (no same-brand option in price band)"
+        if explain_drivers:
+            brand_note = "same manufacturer as the item in cart" if tier["same_manufacturer"] else "different manufacturer (no same-brand option in price band)"
+            reason = (
+                f"upsell from product {pid} to {int(tier['upsell_product_id'])} "
+                f"({brand_note}), +${incremental_value:.2f}; accept probability {p_accept:.0%} "
+                f"(price-ratio heuristic x {model_type}-trained household trade-up propensity, "
+                f"top drivers: {format_drivers(drivers)}); {explain(p_accept, incremental_value)}"
+            )
+        else:
+            reason = None
         candidates.append({
             "action": "upsell",
             "product_id": int(tier["upsell_product_id"]),
@@ -281,19 +311,14 @@ def upsell_candidates(household_key, basket_product_ids):
             "incremental_value": incremental_value,
             "expected_value": score(p_accept, incremental_value),
             "feature_attribution": drivers,
-            "reason": (
-                f"upsell from product {pid} to {int(tier['upsell_product_id'])} "
-                f"({brand_note}), +${incremental_value:.2f}; accept probability {p_accept:.0%} "
-                f"(price-ratio heuristic x {model_type}-trained household trade-up propensity, "
-                f"top drivers: {format_drivers(drivers)}); {explain(p_accept, incremental_value)}"
-            ),
+            "reason": reason,
         })
     return candidates
 
 
-def decide(household_key, basket_product_ids):
-    candidates = cross_sell_candidates(household_key, basket_product_ids)
-    candidates += upsell_candidates(household_key, basket_product_ids)
+def decide(household_key, basket_product_ids, explain_drivers=True):
+    candidates = cross_sell_candidates(household_key, basket_product_ids, explain_drivers=explain_drivers)
+    candidates += upsell_candidates(household_key, basket_product_ids, explain_drivers=explain_drivers)
     no_action = {
         "action": "no_action",
         "p_accept": None,
