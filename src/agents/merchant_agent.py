@@ -1,9 +1,3 @@
-"""Phase 3: the Merchant Agent. Reads the buyer's natural-language
-request, resolves it to a real base product via the catalogue, calls
-the Phase 2 decision engine for the growth decision, and presents
-whatever it returns (which may be no offer at all) in plain English.
-"""
-
 import json
 import os
 

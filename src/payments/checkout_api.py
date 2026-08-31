@@ -28,11 +28,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import razorpay
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
 
 from audit import log_payment_event
 from checkout import MAX_ORDER_PAISE
 from razorpay_mcp import RazorpayMCPError, get_razorpay_tools, parse_mcp_result
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "audit"))
+from audit_log import find_request_id_for_order, log_outcome  # noqa: E402
 
 load_dotenv()
 
@@ -43,6 +47,22 @@ RAZORPAY_WEBHOOK_SECRET = os.environ.get("RAZORPAY_WEBHOOK_SECRET", "")
 razorpay_client = razorpay.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET))
 
 app = FastAPI()
+
+# The conversational checkout tab (dashboard_api.py, port 8002) opens the
+# real Razorpay modal inline in its own page instead of sending the buyer
+# to this server's own /checkout/{order_id} page, so its browser-side JS
+# calls straight into /checkout/verify, /checkout/failed and
+# /checkout/abandoned below from a different origin. Everything those
+# routes actually decide (signature verification, capture, spend cap) is
+# unchanged and still runs only here -- this just lets the browser reach
+# it cross-origin. The CLI's own printed checkout_url still works exactly
+# as before, same-origin, CORS or not.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:8002", "http://127.0.0.1:8002"],
+    allow_methods=["POST"],
+    allow_headers=["Content-Type"],
+)
 
 CHECKOUT_PAGE = """<!doctype html>
 <html><head><meta charset="utf-8"><title>Checkout</title>
@@ -77,6 +97,11 @@ var options = {{
     "modal": {{
         "ondismiss": function () {{
             document.getElementById("result").innerText = "checkout dismissed without completing payment";
+            fetch("/checkout/abandoned", {{
+                method: "POST",
+                headers: {{"Content-Type": "application/json"}},
+                body: JSON.stringify({{razorpay_order_id: "{order_id}"}}),
+            }});
         }}
     }},
 }};
@@ -133,6 +158,9 @@ async def verify_checkout(request: Request):
             "status": "failed",
             "failure_reason": "signature verification failed, payment rejected",
         })
+        request_id = find_request_id_for_order(order_id)
+        if request_id:
+            log_outcome(request_id, "failed", note="signature verification failed")
         return JSONResponse({"verified": False, "status": "failed"})
 
     try:
@@ -151,6 +179,9 @@ async def verify_checkout(request: Request):
                     "amount": amount,
                     "failure_reason": f"amount {amount} exceeds spend cap {MAX_ORDER_PAISE}, capture refused",
                 })
+                request_id = find_request_id_for_order(order_id)
+                if request_id:
+                    log_outcome(request_id, "failed", note="capture refused, amount exceeded spend cap")
                 return JSONResponse({"verified": True, "status": "capture_refused_over_cap"})
 
             await tools["capture_payment"].ainvoke({
@@ -172,6 +203,9 @@ async def verify_checkout(request: Request):
             "status": "failed",
             "failure_reason": f"Razorpay confirm/capture failed: {e}",
         })
+        request_id = find_request_id_for_order(order_id)
+        if request_id:
+            log_outcome(request_id, "failed", note=f"Razorpay confirm/capture failed: {e}")
         return JSONResponse({"verified": True, "status": "failed"})
 
     log_payment_event({
@@ -184,6 +218,11 @@ async def verify_checkout(request: Request):
         "currency": payment.get("currency"),
     })
 
+    request_id = find_request_id_for_order(order_id)
+    if request_id:
+        log_outcome(request_id, "completed" if payment["status"] == "captured" else "failed",
+                     note=f"checkout.js reported verified payment, status={payment['status']}")
+
     return JSONResponse({"verified": True, "status": payment["status"]})
 
 
@@ -192,17 +231,51 @@ async def checkout_failed(request: Request):
     error = await request.json()
     metadata = error.get("metadata", {})
     failure_reason = error.get("description") or error.get("reason") or "payment failed"
+    order_id = metadata.get("order_id")
 
     log_payment_event({
         "event": "checkout_verify",
-        "razorpay_order_id": metadata.get("order_id"),
+        "razorpay_order_id": order_id,
         "razorpay_payment_id": metadata.get("payment_id"),
         "signature_verified": False,
         "status": "failed",
         "failure_reason": failure_reason,
     })
+    if order_id:
+        request_id = find_request_id_for_order(order_id)
+        if request_id:
+            log_outcome(request_id, "failed", note=failure_reason)
 
     return JSONResponse({"status": "failed", "failure_reason": failure_reason})
+
+
+# The one real end state Phase 4 never logged: the buyer opens the
+# checkout modal and just closes it without submitting anything.
+# checkout.js's own ondismiss callback (see CHECKOUT_PAGE above) is the
+# only signal this ever happened, no payment.failed event fires and
+# nothing reaches Razorpay at all, so without this endpoint that
+# transaction would be genuinely untraceable (no razorpay_payment_id ever
+# exists for it) -- exactly the "abandoned" outcome docs/audit_schema.md
+# already listed as a final_status but the code never actually produced.
+@app.post("/checkout/abandoned")
+async def checkout_abandoned(request: Request):
+    body = await request.json()
+    order_id = body.get("razorpay_order_id")
+
+    log_payment_event({
+        "event": "checkout_verify",
+        "razorpay_order_id": order_id,
+        "razorpay_payment_id": None,
+        "signature_verified": False,
+        "status": "abandoned",
+        "failure_reason": "checkout modal dismissed without submitting payment",
+    })
+    if order_id:
+        request_id = find_request_id_for_order(order_id)
+        if request_id:
+            log_outcome(request_id, "abandoned", note="checkout modal dismissed without submitting payment")
+
+    return JSONResponse({"status": "abandoned"})
 
 
 # Registered in the Razorpay Dashboard as either spelling turned out to
@@ -250,14 +323,23 @@ async def razorpay_webhook(request: Request):
 
     if event == "payment.captured":
         payment_entity = payload["payload"]["payment"]["entity"]
+        order_id = payment_entity.get("order_id")
         log_payment_event({
             "event": "webhook_payment_captured",
-            "razorpay_order_id": payment_entity.get("order_id"),
+            "razorpay_order_id": order_id,
             "razorpay_payment_id": payment_entity.get("id"),
             "signature_verified": True,
             "status": "captured",
             "amount": payment_entity.get("amount"),
             "currency": payment_entity.get("currency"),
         })
+        if order_id:
+            request_id = find_request_id_for_order(order_id)
+            if request_id:
+                # a second, independent confirmation of the same outcome the
+                # browser callback likely already logged -- not a duplicate
+                # bug, this is Razorpay's own server-to-server confirmation
+                # arriving on its own schedule, worth keeping as its own record.
+                log_outcome(request_id, "completed", note="confirmed via webhook (payment.captured)")
 
     return JSONResponse({"received": True})

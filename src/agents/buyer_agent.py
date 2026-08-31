@@ -1,10 +1,3 @@
-"""Phase 3: the Buyer Agent. Exactly one tool (query_catalogue), per
-the build plan's spec, so the demo is genuinely agent-to-agent rather
-than a human typing a request. Given a rough shopping intent, it looks
-at what's actually in the catalogue before phrasing its request, so
-the request names a real product_id the Merchant Agent can act on.
-"""
-
 import os
 
 from langchain_anthropic import ChatAnthropic

@@ -1,16 +1,3 @@
-"""Phase 4: the Checkout Agent. Exactly one tool (create_checkout_order),
-mirroring the Buyer Agent's one-tool-only shape, for the same reason: a
-narrow tool surface leaves no room for the LLM to improvise around it.
-Its only job is to turn a finalized cart into a real Razorpay Test Mode
-order and hand back the checkout link, once the buyer/merchant/resolve
-steps have already decided what's actually in the cart.
-
-Async because create_checkout_order is async (it calls Razorpay's MCP
-server over the network), and an MCP-backed tool has no sync entry
-point: verified directly, invoking one via .invoke() outside an agent
-raises NotImplementedError. run_checkout must be awaited.
-"""
-
 import os
 
 from langchain_anthropic import ChatAnthropic

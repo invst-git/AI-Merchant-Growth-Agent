@@ -84,8 +84,8 @@ build plan are in AI_Merchant_Growth_Agent_Build_Plan.md.
   gradient boosting 0.6664 AUC (+1.4 points, small enough that logistic
   stays for its clean coefficients). Save both:
 
-      python3 src/decision_engine/train_upsell_model.py --model gbm --save
-      python3 src/decision_engine/train_acceptance_model.py --model logistic --save
+      python src/decision_engine/train_upsell_model.py --model gbm --save
+      python src/decision_engine/train_acceptance_model.py --model logistic --save
 
   Full numbers and reasoning in docs/objective_function.md.
 - Per-decision explainability (SHAP) added to engine.py for both
@@ -304,7 +304,7 @@ time. Setup:
     uvicorn src.payments.checkout_api:app --port 8001 --app-dir .
 
     # terminal 2, from the repo root
-    python3 src/agents/demo_graph.py --household-key 1 --intent "I need cigarettes"
+    python src/agents/demo_graph.py --household-key 1 --intent "I need cigarettes"
 
 The script prints a checkout_url. Open it, pay with UPI ID
 success@razorpay for the successful rehearsal, then run the command
@@ -451,3 +451,162 @@ this offline replay is tier (a), empirically validated; the one live
 Razorpay transaction from Phase 4 is tier (b), demonstrated; a real
 merchant A/B test remains tier (c), future validation, not claimed to
 exist.
+
+## Phase 6 (Audit trail, bounding, gating): DONE
+
+Full schema: `docs/audit_schema.md`. Summary here.
+
+**Explainable, end to end:** every node in the demo graph now logs its
+part of the audit trail (`src/audit/audit_log.py`) — intent, decision
+(with the engine's own plain-English reason, never hand-written), the
+explicit accept/decline gate, and the cart diff — all keyed by one
+`request_id` per run. Payment events (Phase 4) are bridged in via a
+`checkout_order_linked` event written the instant a real order exists.
+`src/audit/trace.py <request_id>` reconstructs any transaction start to
+finish from `data/audit_log.jsonl` alone — verified structurally on real
+households/baskets across a genuine no_action, an accepted upsell, a
+signature-verification failure, and an abandoned checkout (the browser's
+modal-dismissed case, which Phase 4 never actually logged — fixed here
+with a new `/checkout/abandoned` endpoint).
+
+**Bounded, as two enforced rules, not a slogan:**
+1. Spend cap (Phase 4, unchanged) — re-confirmed still enforced at both
+   order creation and capture time.
+2. Catalogue-declared SKUs only (`src/decision_engine/bounding.py`, new).
+   Checked against 1,000 real baskets before writing this: 31% of the
+   engine's own real chosen offers referenced a product outside the
+   catalogue's declared complements/alternatives for that basket (the
+   engine ranks up to 15 cross-sell candidates to find the best one;
+   the catalogue only declares the top 3 by lift). Now enforced inside
+   `get_growth_decision` itself — an out-of-bounds winner is replaced
+   with `no_action` and the rejection is recorded, never silently
+   dropped. Re-verified on the same 1,000 baskets: zero violations
+   remain.
+
+**Gated:** `resolve_node` is the explicit accept step — `checkout_node`
+is structurally unreachable before it in the graph's linear edges, and
+it now logs a `gate` event on every path before returning, so nothing
+charges silently and it's independently auditable, not just true by
+accident of wiring order.
+
+One honest caveat carried over into `docs/audit_schema.md`: Phase 5's
+replay calls `engine.decide()` directly (for speed at thousands of
+sessions) and isn't subject to the new catalogue bound, so a live
+deployment's realized uplift would be somewhat below Phase 5's reported
+number once bounding vetoes the ~31% of top-ranked offers that fall
+outside the catalogue's declared surface. Not re-run here — out of
+scope for what Phase 6 itself asks for, flagged for whoever picks up
+Phase 7/8 or a future bounded re-run.
+
+## Phase 7 (Dashboard and demo assembly): DONE (build), rehearsal pending
+
+Two views, one dashboard, reading live off `data/audit_log.jsonl` and
+`data/experiment/*.parquet` on every request — nothing on this page is
+hand-curated. Run it with:
+
+```
+uvicorn src.dashboard.dashboard_api:app --port 8002 --app-dir .
+```
+
+then open `http://localhost:8002`.
+
+Visual language: a sidebar-nav layout (Views, Filters, a live Results
+list, Quick Links, an Evidence Tiers box, all in a left sidebar) in
+Inter with a light, minimalist palette — built to a second reference
+screenshot the user supplied partway through this phase, which
+superseded an earlier minimalist "Workspace" reference used for the
+first pass. The user asked for that layout specifically "with the font
+inter, and minimalistic light colors" (not the dark-navy the reference
+itself used), so the structure follows the reference and the palette
+follows the instruction.
+
+**Transactions view** centers the agent's decision, not a flat
+before/after listing: a numbered 1 → 2 → 3 flow — Original Basket
+(Observed) → Agent Decision (the real catalogue-priced product, the
+model's own reason text headlined then expandable in full, expected
+accept probability, expected incremental value) → Customer Outcome
+(accepted/declined/no-offer, payment captured/failed/abandoned/pending,
+basket after) — plus a Transaction Summary card and an expandable raw
+audit trail (`src/audit/trace.py`'s own reconstruction, unmodified). A
+genuine `no_action` and a Phase 6 bound-rejected offer render as
+distinct, honest states (the latter badged "BOUNDED", decision type
+"Offer Blocked (Bounded)"), never hidden or treated as errors. The
+sidebar adds real filtering (outcome, decision type, payment status,
+household/order-id search, date range — all client-side against the
+already-fetched transaction list, no extra round-trips) and four Quick
+Links (Audit Logs, Engine Decisions, Raw Data / Parquet, Documentation)
+that open a modal reading real files live: the audit log tail, decision
+events only, `data/experiment/*.parquet`'s real row counts (via
+`pyarrow.parquet.ParquetFile(...).metadata.num_rows`, not a full read),
+and the repo's real docs with their real descriptions.
+
+The real audit log now holds one genuine traceable transaction (request_id
+`866da2ea-...`, household 2375) from the user's own real `demo_graph.py`
+run, alongside 4 legacy Phase 4 payment-only lines that predate
+request_id and so can't be traced per-transaction. It's a valuable one:
+the engine's real top-ranked candidate (cross_sell to a soft-drinks
+product) was correctly bound-rejected by the Phase 6 catalogue rule
+(soft drinks isn't a declared complement for peanut butter) and replaced
+with `no_action` — live proof the guardrail fires for real, not just in
+a unit test.
+
+**Aggregate view** reads Phase 5's output live (`src/dashboard/aggregate.py`
+reruns the same Mann-Whitney test and bootstrap CIs `stats_module.py`
+used, straight off the archived parquet files) as five KPI cards (AOV
+split, attach rate split, incremental revenue/session, incremental
+contribution margin/session, Mann-Whitney significance), a targeting
+curve with its own case-resampling bootstrap 95% CI band (resample
+sessions with replacement, re-rank each resample by its own expected
+value, recompute the running-mean curve, percentile the band across
+resamples — a k-floor near the low end avoids the wild single-session
+variance a literal k=1 point would show), a "Smart targeting vs. random"
+card headlining +29.5% at the engine's own real targeting rate, and a
+real order-value density distribution (agent vs. control, $0–$200 binned
+plus overflow). Every money or lift figure carries an explicit "TEST
+MODE · OFFLINE REPLAY" badge — deliberately, so "incremental
+revenue/session" is never confused with "revenue generated" (this is an
+offline replay's incremental AOV, not a live production result, and the
+dashboard says so everywhere the number appears, not once at the top).
+
+All charts are hand-rolled inline SVG (polylines/polygons for the CI
+band and density curves) — zero external JS chart libraries, so the
+page works offline in front of a judge; only Google Fonts (Inter) is
+loaded externally, with a full system-font fallback stack if that fetch
+is ever blocked.
+
+Verified structurally (FastAPI `TestClient`, real Phase 5 parquet
+files, zero LLM/Razorpay calls) against every endpoint, including the
+new `/api/raw/*` routes and the real `866da2ea` transaction, plus a full
+visual QA pass in a headless browser: the built page was staged into
+the cloud sandbox with fresh fixtures (the one real transaction, plus
+four synthetic-but-clearly-labeled `TESTPHASE7` scenarios covering
+accepted/declined/no-action/bound-rejected — visual QA fixtures only,
+never written to the real audit log) and screenshotted through every
+view, filter, and modal with the sandbox's pre-installed headless
+Chromium via Playwright. That pass caught and fixed two real bugs: the
+`.view` class had no `display:none` rule, so the inactive view stayed
+in the DOM and rendered stacked underneath the active one instead of
+being hidden; and the outcome badge showed "ACCEPTED" for a plain
+`no_action` session whose payment happened to complete, which is
+misleading since nothing was ever offered — it now shows "COMPLETED"
+for that case and reserves "ACCEPTED" for an offer that was actually
+accepted.
+
+**Files:** `src/dashboard/aggregate.py` (live Phase 5 computation, now
+including the targeting-curve bootstrap and the order-value
+distribution), `src/dashboard/dashboard_api.py` (FastAPI:
+`/api/transactions`, `/api/transactions/{request_id}`,
+`/api/audit/{request_id}`, `/api/aggregate`, `/api/raw/audit-log`,
+`/api/raw/decisions`, `/api/raw/parquet-files`, `/api/raw/docs`),
+`src/dashboard/static/index.html` (single-page frontend, no external
+dependencies besides the Inter font — self-contained so it works
+offline in front of a judge).
+
+**Rehearsal still pending:** the plan's own exit line for this phase —
+the scripted demo sequence (`docs/demo_script.md`) run start to finish
+twice in a row with no manual data patching — needs real API calls and
+a real browser completing real Test Mode payments, so it's the user's
+step, not something built or run here. `docs/demo_script.md` has the
+exact commands, talking points, and two concrete household/intent pairs
+(found by calling the real decision engine directly, free) verified to
+produce an accepted cross-sell and a structurally guaranteed no_action.

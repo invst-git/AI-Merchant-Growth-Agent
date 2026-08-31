@@ -1,33 +1,8 @@
-"""Phase 3/4: the top-level demo graph. Wires the Buyer Agent, Merchant
-Agent, and (Phase 4) Checkout Agent together as nodes in one LangGraph
-StateGraph, plus a deterministic resolve step that tracks cart state
-before and after, since that diff is what the Phase 7 dashboard will
-read.
-
-resolve_node's accept/decline draw is a placeholder for this phase only,
-a seeded random draw against p_accept so demo runs are repeatable. It is
-NOT the Phase 5 experiment engine, that phase needs a real data-grounded
-simulator, not a coin flip; this one only needs to prove the graph
-produces a correct before/after cart diff and handles no_action cleanly.
-
-checkout_node (Phase 4) always runs, even on no_action: the base product
-still needs to be paid for regardless of whether an upsell was offered.
-It creates a real Razorpay Test Mode order and prints a checkout_url;
-completing payment itself needs a browser (verified against Razorpay's
-own docs, Standard Checkout cannot be finished server-side), so this
-script cannot close that last step by itself. See README for the
-uvicorn command that serves that checkout page locally.
-
-The graph runs via ainvoke, not invoke: checkout_node calls an
-MCP-backed tool with no sync entry point (verified directly, .invoke()
-on one raises NotImplementedError), so run_demo is async.
-
-Run: python3 src/agents/demo_graph.py (needs ANTHROPIC_API_KEY and
-RAZORPAY_KEY_ID/SECRET in .env, costs real API calls, not run by me).
-"""
-
 import asyncio
 import random
+import sys
+import uuid
+from pathlib import Path
 from typing import Optional, TypedDict
 
 from dotenv import load_dotenv
@@ -37,10 +12,14 @@ from buyer_agent import run_buyer
 from merchant_agent import run_merchant
 from checkout_agent import run_checkout
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "audit"))
+from audit_log import log_intent, log_decision, log_gate, log_cart, log_checkout_link  # noqa: E402
+
 load_dotenv()  # picks up ANTHROPIC_API_KEY, RAZORPAY_KEY_ID/SECRET from .env at the repo root
 
 
 class DemoState(TypedDict):
+    request_id: str
     household_key: int
     buyer_intent: str
     buyer_request: Optional[str]
@@ -55,12 +34,16 @@ class DemoState(TypedDict):
 
 
 def buyer_node(state: DemoState) -> dict:
-    return {"buyer_request": run_buyer(state["buyer_intent"])}
+    buyer_request = run_buyer(state["buyer_intent"])
+    log_intent(state["request_id"], state["household_key"], state["buyer_intent"])
+    return {"buyer_request": buyer_request}
 
 
 def merchant_node(state: DemoState) -> dict:
     result = run_merchant(state["household_key"], state["buyer_request"])
     cart_before = result["basket_product_ids"] or []
+    if result["decision"] is not None:
+        log_decision(state["request_id"], state["household_key"], cart_before, result["decision"])
     return {
         "merchant_reply": result["reply"],
         "decision": result["decision"],
@@ -69,10 +52,19 @@ def merchant_node(state: DemoState) -> dict:
 
 
 def resolve_node(state: DemoState) -> dict:
+    # This is Phase 6's explicit accept step (the "gate"): checkout_node
+    # only ever runs after this returns, and every branch below logs a
+    # gate event before returning, so the audit trail always shows what
+    # was offered and whether it was accepted before any Razorpay order
+    # gets created -- nothing charges silently.
+    request_id = state["request_id"]
     cart_before = state["cart_before"] or []
     decision = state["decision"]
 
     if decision is None:
+        log_gate(request_id, offer_action=None, p_accept=None, accepted=None,
+                  mechanism="n/a", note="merchant agent never called get_growth_decision, nothing to resolve")
+        log_cart(request_id, cart_before, cart_before)
         return {
             "cart_after": cart_before,
             "accepted": None,
@@ -81,30 +73,48 @@ def resolve_node(state: DemoState) -> dict:
 
     chosen = decision["chosen_action"]
     if chosen["action"] == "no_action":
+        note = "no offer was made (no_action), cart unchanged"
+        if chosen.get("bound_rejected"):
+            note += "; the engine's top candidate was blocked by the Phase 6 catalogue bounding rule"
+        log_gate(request_id, offer_action="no_action", p_accept=None, accepted=None,
+                  mechanism="n/a", note=note)
+        log_cart(request_id, cart_before, cart_before)
         return {
             "cart_after": cart_before,
             "accepted": None,
-            "resolution_note": "no offer was made (no_action), cart unchanged",
+            "resolution_note": note,
         }
 
     p_accept = chosen["p_accept"]
     accepted = random.random() < p_accept
     offered_product_id = chosen["product_id"]
     cart_after = cart_before + [offered_product_id] if accepted else list(cart_before)
+    note = (
+        f"{chosen['action']} offer (p_accept={p_accept:.0%}) was "
+        f"{'accepted' if accepted else 'declined'} (seeded random draw, placeholder for Phase 5)"
+    )
+    log_gate(request_id, offer_action=chosen["action"], p_accept=p_accept, accepted=accepted,
+              mechanism="seeded_random_draw_vs_real_p_accept", note=note)
+    log_cart(request_id, cart_before, cart_after)
     return {
         "cart_after": cart_after,
         "accepted": accepted,
-        "resolution_note": (
-            f"{chosen['action']} offer (p_accept={p_accept:.0%}) was "
-            f"{'accepted' if accepted else 'declined'} (seeded random draw, placeholder for Phase 5)"
-        ),
+        "resolution_note": note,
     }
 
 
 async def checkout_node(state: DemoState) -> dict:
     cart_after = state["cart_after"] or []
     result = await run_checkout(state["household_key"], cart_after)
-    return {"checkout_reply": result["reply"], "checkout_order": result["order"]}
+    order = result["order"]
+    if order and order.get("order_id"):
+        # links this request_id to the real razorpay_order_id the moment it
+        # exists, before the buyer ever reaches the browser -- this is what
+        # lets trace.py join the agent-side record to whatever the browser
+        # and Razorpay's webhook report later (checkout_api.py looks this
+        # link up in reverse to log the final outcome against it).
+        log_checkout_link(state["request_id"], order["order_id"])
+    return {"checkout_reply": result["reply"], "checkout_order": order}
 
 
 def build_demo_graph():
@@ -124,7 +134,68 @@ def build_demo_graph():
 async def run_demo(household_key: int, buyer_intent: str, seed: int = 7) -> dict:
     random.seed(seed)
     graph = build_demo_graph()
-    return await graph.ainvoke({"household_key": household_key, "buyer_intent": buyer_intent})
+    request_id = str(uuid.uuid4())
+    result = await graph.ainvoke({
+        "request_id": request_id, "household_key": household_key, "buyer_intent": buyer_intent,
+    })
+    result["request_id"] = request_id
+    return result
+
+
+# --- Conversational checkout (chat) -------------------------------------
+# Same buyer -> merchant flow as run_demo above, but split at the offer so
+# a live chat can show the merchant's offer and wait for the customer's own
+# yes/no instead of resolve_node's seeded random draw. Nothing above this
+# line is touched -- the CLI path (_main, run_demo) behaves exactly as
+# before; this is purely additive.
+
+_PENDING_OFFERS: dict[str, DemoState] = {}
+
+
+async def start_conversational_checkout(household_key: int, buyer_intent: str) -> dict:
+    request_id = str(uuid.uuid4())
+    state: DemoState = {
+        "request_id": request_id, "household_key": household_key, "buyer_intent": buyer_intent,
+    }
+    state.update(buyer_node(state))
+    state.update(merchant_node(state))
+
+    decision = state.get("decision")
+    chosen = decision["chosen_action"] if decision else None
+
+    if chosen is None or chosen["action"] == "no_action":
+        # Nothing to ask the customer -- resolve_node's no-decision and
+        # no_action branches are fully deterministic (no random draw), so
+        # they're safe to reuse as-is, then go straight to checkout.
+        state.update(resolve_node(state))
+        state.update(await checkout_node(state))
+        state["awaiting_reply"] = False
+        return state
+
+    _PENDING_OFFERS[request_id] = state
+    return {**state, "awaiting_reply": True}
+
+
+async def resolve_conversational_checkout(request_id: str, accepted: bool) -> dict:
+    state = _PENDING_OFFERS.pop(request_id, None)
+    if state is None:
+        raise KeyError(f"no pending offer for request_id={request_id!r} (already resolved, or never existed)")
+
+    cart_before = state["cart_before"] or []
+    chosen = state["decision"]["chosen_action"]
+    cart_after = cart_before + [chosen["product_id"]] if accepted else list(cart_before)
+    note = (
+        f"{chosen['action']} offer (p_accept={chosen['p_accept']:.0%}) was "
+        f"{'accepted' if accepted else 'declined'} by the customer in the conversational checkout"
+    )
+    log_gate(request_id, offer_action=chosen["action"], p_accept=chosen["p_accept"], accepted=accepted,
+              mechanism="customer_reply_via_chat", note=note)
+    log_cart(request_id, cart_before, cart_after)
+    state.update({"cart_after": cart_after, "accepted": accepted, "resolution_note": note})
+
+    state.update(await checkout_node(state))
+    state["awaiting_reply"] = False
+    return state
 
 
 async def _main():
@@ -137,6 +208,8 @@ async def _main():
     args = parser.parse_args()
 
     result = await run_demo(household_key=args.household_key, buyer_intent=args.intent, seed=args.seed)
+    print("request id (for tracing, see src/audit/trace.py):", result["request_id"])
+    print()
     print("buyer request:", result["buyer_request"])
     print()
     print("merchant reply:", result["merchant_reply"])

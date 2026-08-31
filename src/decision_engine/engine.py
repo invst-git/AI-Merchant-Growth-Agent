@@ -30,6 +30,15 @@ name so the attribution is per real feature, not per dummy column.
 """
 
 import math
+import os
+
+# joblib's loky backend tries to shell out to count physical CPU cores;
+# that subprocess call fails on Windows (WinError 2) and prints a scary
+# multi-line UserWarning + traceback on every run, even though joblib
+# falls back to logical core count fine on its own. Set this before
+# joblib is imported (loky's core-count probe is a lazy one-time check,
+# cached at first use) so the fallback happens silently instead.
+os.environ.setdefault("LOKY_MAX_CPU_COUNT", str(os.cpu_count() or 4))
 
 import joblib
 import numpy as np
