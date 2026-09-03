@@ -22,7 +22,7 @@ Routes:
     GET /api/raw/parquet-files         data/experiment/*.parquet file listing
     GET /api/raw/docs                  real docs/README files, with descriptions
 """
-import os
+import re
 import sys
 from pathlib import Path
 
@@ -31,21 +31,49 @@ from aggregate import compute_aggregate  # noqa: E402
 
 _ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(_ROOT / "src" / "audit"))
-sys.path.insert(0, str(_ROOT / "src" / "payments"))
 sys.path.insert(0, str(_ROOT / "src" / "decision_engine"))
 sys.path.insert(0, str(_ROOT / "src" / "agents"))
 from trace import trace_transaction, render  # noqa: E402
 from audit import read_audit_log  # noqa: E402
 import engine  # noqa: E402  (PRODUCT_LOOKUP: the one real price/category table)
-from demo_graph import start_conversational_checkout, resolve_conversational_checkout  # noqa: E402
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, JSONResponse
-from pydantic import BaseModel
 
 app = FastAPI()
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
+
+# Real money in this project is INR -- Razorpay (src/payments/checkout.py)
+# is an Indian payment gateway and creates real Test Mode INR orders. The
+# dunnhumby dataset's prices are real US grocery prices in USD, and the
+# decision engine (src/decision_engine/engine.py) is trained on that USD
+# scale, so USD_TO_INR is applied here, at the dashboard's display
+# boundary only -- never to catalogue.py, engine.py, or the raw
+# audit_log.jsonl on disk, all of which stay in USD. The separate
+# Aggregate view below reads data/experiment/*.parquet directly (a
+# simulated Phase 5 experiment, not real transactions -- see that view's
+# own "not a simulated record" note) and is deliberately left in USD,
+# unconverted, so a real, judged statistical result is never touched.
+USD_TO_INR = 94.45
+
+_DOLLAR_FIGURE_RE = re.compile(r"\$(-?\d+(?:\.\d+)?)")
+
+
+def _to_inr(usd_value):
+    return usd_value * USD_TO_INR
+
+
+def _inr_text(text):
+    """Rewrite every literal $X.XX figure inside the engine's own
+    generated reasoning prose (e.g. "$4.18 incremental ... $0.238
+    expected value") into its INR equivalent. Pure display formatting at
+    the API response boundary -- the engine's actual numbers, the raw
+    audit log, and every comparison/ranking the engine already did all
+    already happened in USD before this ever runs."""
+    if not text:
+        return text
+    return _DOLLAR_FIGURE_RE.sub(lambda m: f"₹{float(m.group(1)) * USD_TO_INR:.2f}", text)
 
 
 def _price_and_desc(product_id):
@@ -63,19 +91,20 @@ def _price_and_desc(product_id):
         "product_id": int(product_id),
         "commodity_desc": str(row["commodity_desc"]).title(),
         "sub_commodity_desc": str(row["sub_commodity_desc"]).title(),
-        "price": float(row["price"]),
+        "price": _to_inr(float(row["price"])),
     }
 
 
 def _basket_value(product_ids):
-    """Sum of real catalogue prices for a list of product ids, ids not in
-    the table dropped -- same policy as src/experiment/basket_pool.py."""
+    """Sum of real catalogue prices for a list of product ids (converted
+    to INR for display -- see USD_TO_INR above), ids not in the table
+    dropped -- same policy as src/experiment/basket_pool.py."""
     if not product_ids:
         return 0.0, 0
     valid = [p for p in product_ids if p in engine.PRODUCT_LOOKUP.index]
     if not valid:
         return 0.0, 0
-    return float(engine.PRODUCT_LOOKUP.loc[valid, "price"].sum()), len(product_ids)
+    return _to_inr(float(engine.PRODUCT_LOOKUP.loc[valid, "price"].sum())), len(product_ids)
 
 
 def _short_reason(reason_text):
@@ -90,46 +119,6 @@ def _short_reason(reason_text):
     headline = parts[0].strip()
     rest = parts[1].strip() if len(parts) > 1 else None
     return headline, rest
-
-
-def _checkout_display(state):
-    """Customer-safe view of one conversational-checkout turn: real
-    product names/prices off the same table _price_and_desc already
-    serves the Per-Transaction view with, never the agent's own prose
-    reply (that text is written for the audit log, not a shopper -- see
-    merchant_agent.py's prompt) and never the engine's internal reasoning
-    unless the caller explicitly expands it (offer_why_headline/_full,
-    same split _short_reason already does for the dashboard)."""
-    display = {}
-    cart_before = state.get("cart_before") or []
-    display["base_products"] = [p for p in (_price_and_desc(pid) for pid in cart_before) if p]
-
-    decision = state.get("decision")
-    chosen = decision["chosen_action"] if decision else None
-    if chosen and chosen.get("action") != "no_action":
-        headline, full_reason = _short_reason(decision.get("reason_text"))
-        display["offer_action"] = chosen["action"]
-        display["offer_product"] = _price_and_desc(chosen.get("product_id"))
-        display["offer_p_accept"] = chosen.get("p_accept")
-        display["offer_why_headline"] = headline
-        display["offer_why_full"] = full_reason
-
-    cart_after = state.get("cart_after")
-    if cart_after is not None:
-        after_products = [p for p in (_price_and_desc(pid) for pid in cart_after) if p]
-        display["final_products"] = after_products
-        display["final_total"] = sum(p["price"] for p in after_products)
-        display["accepted"] = state.get("accepted")
-
-    order = state.get("checkout_order")
-    if order:
-        display["order_id"] = order.get("order_id")
-        display["amount_paise"] = order.get("amount_paise")
-        display["amount_display"] = order.get("amount_display")
-        display["currency"] = order.get("currency")
-        display["checkout_url"] = order.get("checkout_url")
-
-    return display
 
 
 def _outcome_label(gate, outcome_events, payment_events):
@@ -186,14 +175,16 @@ def _transaction_view(request_id: str):
     if decision:
         headline, full_reason = _short_reason(decision.get("reason_text"))
         product = _price_and_desc(decision.get("chosen_product_id"))
+        incremental_value = decision.get("incremental_value")
+        expected_value = decision.get("expected_value")
         offer = {
             "action": decision.get("chosen_action"),
             "product": product,
             "product_id": decision.get("chosen_product_id"),
-            "why_headline": headline,
-            "why_full": full_reason,
-            "expected_incremental_value": decision.get("incremental_value"),
-            "expected_value": decision.get("expected_value"),
+            "why_headline": _inr_text(headline),
+            "why_full": _inr_text(full_reason),
+            "expected_incremental_value": _to_inr(incremental_value) if incremental_value is not None else None,
+            "expected_value": _to_inr(expected_value) if expected_value is not None else None,
             "p_accept": decision.get("p_accept"),
             "bound_rejected": bool(decision.get("bound_rejected")),
             "rejected_action": decision.get("rejected_action"),
@@ -266,57 +257,6 @@ def get_audit_trace(request_id: str):
 @app.get("/api/aggregate")
 def get_aggregate():
     return JSONResponse(compute_aggregate())
-
-
-# ---- Conversational checkout: chat UI backend, same catalogue and same
-# growth-decision engine as the CLI demo, just reached by typing instead of
-# by --household-key/--intent flags. See demo_graph.py for the actual
-# agent logic; these two routes are thin wrappers over it. ----
-
-class CheckoutStartBody(BaseModel):
-    intent: str
-    household_key: int = 1060
-
-
-class CheckoutResolveBody(BaseModel):
-    request_id: str
-    accepted: bool
-
-
-@app.post("/api/checkout/start")
-async def checkout_start(body: CheckoutStartBody):
-    try:
-        result = await start_conversational_checkout(body.household_key, body.intent)
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f"checkout agent failed: {e}")
-    result["display"] = _checkout_display(result)
-    return JSONResponse(result)
-
-
-@app.post("/api/checkout/resolve")
-async def checkout_resolve(body: CheckoutResolveBody):
-    try:
-        result = await resolve_conversational_checkout(body.request_id, body.accepted)
-    except KeyError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f"checkout resolution failed: {e}")
-    result["display"] = _checkout_display(result)
-    return JSONResponse(result)
-
-
-@app.get("/api/checkout/razorpay-key")
-def checkout_razorpay_key():
-    # RAZORPAY_KEY_ID is Razorpay's *public* key (the same value
-    # checkout_api.py already embeds directly in the checkout page's HTML
-    # source) -- safe to serve to the browser so the conversational
-    # checkout tab can open the real payment modal inline, in this same
-    # tab, instead of a separate localhost:8001 page. The secret key is
-    # never read here or sent anywhere near the browser.
-    key_id = os.environ.get("RAZORPAY_KEY_ID", "")
-    if not key_id:
-        raise HTTPException(status_code=503, detail="RAZORPAY_KEY_ID not configured on this server")
-    return JSONResponse({"key_id": key_id})
 
 
 # ---- Quick Links: real project data, not decorative dead links ----

@@ -1,0 +1,522 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Concierge — AI Merchant Growth Agent</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+<style>
+  :root{
+    --bg:#f6f6f9; --page:#fafafc; --card:#ffffff;
+    --ink:#16181d; --muted:#6b7280; --faint:#9aa0ab; --line:#e8e9ee;
+    --indigo:#6552e0; --indigo-ink:#4a3fc4; --indigo-bg:#efedfd; --indigo-bg-hover:#e4e0fb;
+    --green-bg:#dcfce7; --green-ink:#15803d;
+    --rose-bg:#fee2e2; --rose-ink:#b91c1c;
+    --amber-bg:#fef3c7; --amber-ink:#8a5a10;
+    --slate-bg:#eef0f3; --slate-ink:#565b66;
+    --radius-lg:20px; --radius-md:14px; --radius-sm:10px; --pill:999px;
+    --shadow: 0 1px 2px rgba(16,24,40,.05), 0 6px 18px -10px rgba(16,24,40,.12);
+    --shadow-lift: 0 4px 10px rgba(16,24,40,.06), 0 16px 32px -14px rgba(16,24,40,.16);
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .shell{max-width:720px; margin:0 auto; height:100vh; display:flex; flex-direction:column; background:var(--page); border-left:1px solid var(--line); border-right:1px solid var(--line);}
+
+  /* ---------- header ---------- */
+  header{display:flex; align-items:center; justify-content:space-between; padding:18px 28px; border-bottom:1px solid var(--line); background:var(--card); flex-shrink:0;}
+  .brand{display:flex; align-items:center; gap:9px;}
+  .brand-mark{width:26px; height:26px; border-radius:8px; background:var(--indigo); display:flex; align-items:center; justify-content:center;}
+  .brand-mark svg{width:14px; height:14px;}
+  .brand-name{font-size:14.5px; font-weight:800; letter-spacing:-.01em;}
+  .brand-sub{font-size:11px; color:var(--faint); font-weight:600; margin-top:1px;}
+  .persona{display:flex; align-items:center; gap:8px; background:var(--slate-bg); border-radius:var(--pill); padding:6px 12px 6px 6px;}
+  .persona-dot{width:22px; height:22px; border-radius:50%; background:linear-gradient(160deg,#8477ea,var(--indigo)); display:flex; align-items:center; justify-content:center; color:#fff; font-size:10.5px; font-weight:800;}
+  .persona-text{font-size:12px; font-weight:700; color:var(--ink);}
+  .persona-text span{display:block; font-size:10px; font-weight:600; color:var(--faint); margin-top:0;}
+
+  /* ---------- conversation ---------- */
+  .convo-scroll{flex:1; overflow-y:auto; padding:24px 28px;}
+  .convo{display:flex; flex-direction:column; gap:14px; min-height:100%;}
+  .empty{margin:auto; text-align:center; max-width:300px; color:var(--faint);}
+  .empty-icon{width:44px; height:44px; border-radius:50%; background:var(--indigo-bg); margin:0 auto 14px; display:flex; align-items:center; justify-content:center;}
+  .empty-title{font-size:13.5px; font-weight:700; color:var(--muted); margin-bottom:5px;}
+  .empty-sub{font-size:12px; line-height:1.55;}
+
+  .row{display:flex; width:100%;}
+  .row.from-customer{justify-content:flex-end;}
+  .row.from-agent{justify-content:flex-start;}
+  .row.system{justify-content:center;}
+
+  .bubble-customer{background:var(--indigo); color:#fff; padding:11px 16px; border-radius:18px; border-bottom-right-radius:5px; font-size:13.5px; line-height:1.5; max-width:78%; box-shadow:var(--shadow);}
+
+  .agent-turn{max-width:86%; display:flex; flex-direction:column; gap:6px;}
+  .agent-label{font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--faint); margin-left:2px;}
+  .agent-card{background:var(--card); border:1px solid var(--line); border-radius:var(--radius-md); border-top-left-radius:5px; box-shadow:var(--shadow); padding:14px 16px;}
+
+  .typing{display:inline-flex; align-items:center; gap:8px; background:var(--card); border:1px solid var(--line); border-radius:var(--radius-md); border-top-left-radius:5px; box-shadow:var(--shadow); padding:12px 16px; width:fit-content;}
+  .typing-dots{display:inline-flex; gap:4px;}
+  .typing-dots i{width:6px; height:6px; border-radius:50%; background:var(--faint); display:inline-block; animation:blink 1.1s infinite ease-in-out;}
+  .typing-dots i:nth-child(2){animation-delay:.15s;} .typing-dots i:nth-child(3){animation-delay:.3s;}
+  @keyframes blink{0%,80%,100%{opacity:.25; transform:translateY(0);} 40%{opacity:1; transform:translateY(-2px);}}
+  .typing-status{font-size:11.5px; font-weight:600; color:var(--muted);}
+
+  .prow{display:flex; align-items:center; gap:11px;}
+  .ptag{flex:0 0 auto; width:34px; height:34px; border-radius:9px; background:var(--slate-bg); color:var(--slate-ink); display:flex; align-items:center; justify-content:center; font-size:11.5px; font-weight:800;}
+  .pinfo{flex:1; min-width:0;}
+  .pname{font-size:13px; font-weight:700; color:var(--ink); line-height:1.35;}
+  .pcat{font-size:11px; color:var(--faint); margin-top:1px;}
+  .pprice{flex:0 0 auto; font-size:13px; font-weight:800; color:var(--ink); font-variant-numeric:tabular-nums;}
+
+  .card-caption{font-size:12px; color:var(--muted); margin-bottom:10px; line-height:1.5;}
+  .card-caption strong{color:var(--ink); font-weight:700;}
+  .pitch{font-size:13px; color:var(--ink); font-weight:600; line-height:1.5; margin-bottom:11px;}
+
+  .why-link{margin-top:11px; border:none; background:none; padding:0; font-size:11.5px; font-weight:700; color:var(--indigo-ink); cursor:pointer; font-family:inherit; display:inline-flex; align-items:center; gap:4px;}
+  .why-link:hover{color:var(--indigo);}
+  .why-box{display:none; margin-top:9px; background:var(--indigo-bg); border-radius:var(--radius-sm); padding:11px 13px; font-size:11.5px; line-height:1.55; color:#3c3470;}
+  .why-box.open{display:block;}
+  .why-pct{font-weight:800; color:var(--indigo-ink);}
+
+  .actions{display:flex; gap:8px; margin-top:13px;}
+  .btn{font-family:inherit; font-size:12.5px; font-weight:700; border-radius:var(--radius-sm); padding:9px 16px; cursor:pointer; border:1.5px solid var(--line); background:#fff; color:var(--ink); transition:transform .08s ease;}
+  .btn:active{transform:scale(.97);}
+  .btn-primary{background:var(--indigo); border-color:var(--indigo); color:#fff; flex:1;}
+  .btn-primary:hover{background:var(--indigo-ink); border-color:var(--indigo-ink);}
+  .btn-ghost{background:#fff; color:var(--muted); flex:1;}
+  .btn-ghost:hover{background:var(--slate-bg); color:var(--ink);}
+  .btn[disabled]{opacity:.45; cursor:default; transform:none !important;}
+
+  .sys-note{font-size:11px; font-weight:700; color:var(--faint); background:var(--slate-bg); padding:6px 13px; border-radius:var(--pill);}
+  .sys-note.ok{color:var(--green-ink); background:var(--green-bg);}
+  .sys-note.no{color:var(--slate-ink); background:var(--slate-bg);}
+  .sys-note.err{color:var(--rose-ink); background:var(--rose-bg);}
+
+  .guardrail-card{background:var(--slate-bg); border-radius:var(--radius-sm); padding:10px 13px; font-size:11.5px; color:var(--slate-ink); line-height:1.5; margin-top:2px;}
+  .guardrail-card b{color:var(--ink);}
+
+  .receipt-list{margin:2px 0 11px; display:flex; flex-direction:column; gap:9px;}
+  .receipt-total{display:flex; justify-content:space-between; align-items:baseline; border-top:1px dashed var(--line); padding-top:10px; margin-top:2px;}
+  .receipt-total b{font-size:15px;}
+  .receipt-note{font-size:10.5px; color:var(--faint); margin-top:5px;}
+
+  .pay-btn{display:flex; align-items:center; justify-content:center; gap:7px; width:100%; margin-top:13px; background:var(--indigo); color:#fff; border:none; border-radius:var(--radius-sm); padding:12px 16px; font-size:13px; font-weight:700; cursor:pointer; font-family:inherit;}
+  .pay-btn:hover{background:var(--indigo-ink);}
+  .pay-btn[disabled]{opacity:.55; cursor:default;}
+  .pay-btn svg{width:14px; height:14px;}
+
+  .outcome{margin-top:12px; border-radius:var(--radius-sm); padding:11px 13px; font-size:12px; font-weight:600; line-height:1.5; display:flex; gap:9px; align-items:flex-start;}
+  .outcome.completed{background:var(--green-bg); color:var(--green-ink);}
+  .outcome.failed{background:var(--rose-bg); color:var(--rose-ink);}
+  .outcome.abandoned{background:var(--amber-bg); color:var(--amber-ink);}
+
+  /* ---------- input ---------- */
+  .input-row{display:flex; gap:10px; padding:14px 28px; border-top:1px solid var(--line); background:var(--card); flex-shrink:0;}
+  .input-row input{flex:1; border:1.5px solid var(--line); border-radius:var(--radius-sm); padding:11px 15px; font-size:13.5px; font-family:inherit; outline:none; background:var(--page);}
+  .input-row input:focus{border-color:var(--indigo); background:var(--card);}
+  .input-row input[disabled]{opacity:.6;}
+  .send-btn{background:var(--indigo); color:#fff; border:none; border-radius:var(--radius-sm); padding:0 22px; font-size:13px; font-weight:700; cursor:pointer; font-family:inherit;}
+  .send-btn:hover{background:var(--indigo-ink);}
+  .send-btn[disabled]{opacity:.5; cursor:default;}
+
+  /* ---------- footer ---------- */
+  footer{border-top:1px solid var(--line); background:var(--card); padding:10px 28px; display:flex; align-items:center; justify-content:space-between; gap:12px; flex-shrink:0;}
+  .foot-text{font-size:10.5px; color:var(--faint); line-height:1.5;}
+  .foot-link{font-size:11px; font-weight:700; color:var(--indigo-ink); text-decoration:none; display:inline-flex; align-items:center; gap:5px; white-space:nowrap;}
+  .foot-link:hover{color:var(--indigo);}
+  .foot-link svg{width:10px; height:10px;}
+
+  ::-webkit-scrollbar{width:8px; height:8px;}
+  ::-webkit-scrollbar-thumb{background:#dcdde4; border-radius:99px;}
+</style>
+</head>
+<body>
+
+<div class="shell">
+  <header>
+    <div class="brand">
+      <div class="brand-mark">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M4 12h16M14 6l6 6-6 6" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <div>
+        <div class="brand-name">Concierge</div>
+        <div class="brand-sub">AI Merchant Growth Agent</div>
+      </div>
+    </div>
+    <div class="persona">
+      <div class="persona-dot">H</div>
+      <div class="persona-text">Household 1060<span>Signed in</span></div>
+    </div>
+  </header>
+
+  <div class="convo-scroll" id="scroll">
+    <div class="convo" id="convo">
+      <div class="empty" id="empty">
+        <div class="empty-icon">
+          <svg viewBox="0 0 24 24" fill="none" width="20" height="20"><path d="M8 10h8M8 14h5M20 12c0 4.418-3.582 8-8 8-1.06 0-2.07-.207-2.995-.583L4 20l1.02-3.06A7.96 7.96 0 0 1 4 12c0-4.418 3.582-8 8-8s8 3.582 8 8Z" stroke="#6552e0" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <div class="empty-title">Say what you're shopping for</div>
+        <div class="empty-sub">Type it in your own words, like you would to a person &mdash; the agents look it up in the real catalogue and reply live.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="input-row">
+    <input type="text" id="chat-input" placeholder="What would you like to buy?" autocomplete="off">
+    <button class="send-btn" id="send-btn">Send</button>
+  </div>
+
+  <footer>
+    <div class="foot-text">Every product, price and offer here is real &mdash; sourced live from the household panel dataset.</div>
+    <a class="foot-link" id="dashLink" href="http://localhost:8002" target="_blank" rel="noopener">
+      Operator view
+      <svg viewBox="0 0 24 24" fill="none"><path d="M7 17 17 7M9 7h8v8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </a>
+  </footer>
+</div>
+
+<script>
+const CHECKOUT_ORIGIN = "http://localhost:8001";
+const RAZORPAY_KEY_ID = "__RAZORPAY_KEY_ID__";
+const HOUSEHOLD_KEY = 1060;
+
+const THINKING_STEPS = ["Reading your request…", "Checking the real catalogue…", "Evaluating offers for this household…"];
+const FINALIZING_STEPS = ["Updating your order…", "Creating a real Razorpay order…"];
+
+let busy = false;
+let pendingRequestId = null;
+
+const convoEl = document.getElementById('convo');
+const emptyEl = document.getElementById('empty');
+const scrollEl = document.getElementById('scroll');
+const inputEl = document.getElementById('chat-input');
+const sendBtn = document.getElementById('send-btn');
+
+function money(n){ return '₹' + n.toFixed(2); }
+function wait(ms){ return new Promise(r => setTimeout(r, ms)); }
+function scrollDown(){ requestAnimationFrame(() => { scrollEl.scrollTop = scrollEl.scrollHeight; }); }
+
+function clearEmpty(){
+  if(emptyEl && emptyEl.parentNode) emptyEl.remove();
+}
+
+function initials(catDesc){
+  const words = (catDesc || '').replace(/[^A-Za-z ]/g,' ').trim().split(/\s+/).filter(Boolean);
+  if(!words.length) return '•';
+  if(words.length === 1) return words[0].slice(0,2).toUpperCase();
+  return (words[0][0] + words[1][0]).toUpperCase();
+}
+
+function productRow(p){
+  const div = document.createElement('div');
+  div.className = 'prow';
+  div.innerHTML = `
+    <div class="ptag">${initials(p.commodity_desc)}</div>
+    <div class="pinfo">
+      <div class="pname">${p.sub_commodity_desc}</div>
+      <div class="pcat">${p.commodity_desc} &middot; #${p.product_id}</div>
+    </div>
+    <div class="pprice">${money(p.price)}</div>`;
+  return div;
+}
+
+function appendCustomerBubble(text){
+  clearEmpty();
+  const row = document.createElement('div');
+  row.className = 'row from-customer';
+  row.innerHTML = `<div class="bubble-customer"></div>`;
+  row.firstChild.textContent = text;
+  convoEl.appendChild(row);
+  scrollDown();
+}
+
+function agentTurnShell(label){
+  const row = document.createElement('div');
+  row.className = 'row from-agent';
+  const turn = document.createElement('div');
+  turn.className = 'agent-turn';
+  if(label){
+    const l = document.createElement('div');
+    l.className = 'agent-label';
+    l.textContent = label;
+    turn.appendChild(l);
+  }
+  row.appendChild(turn);
+  convoEl.appendChild(row);
+  return turn;
+}
+
+function showTyping(steps){
+  const row = document.createElement('div');
+  row.className = 'row from-agent';
+  row.innerHTML = `<div class="typing"><span class="typing-dots"><i></i><i></i><i></i></span><span class="typing-status"></span></div>`;
+  convoEl.appendChild(row);
+  scrollDown();
+  const statusEl = row.querySelector('.typing-status');
+  let idx = 0;
+  statusEl.textContent = steps[0];
+  const timer = setInterval(() => {
+    idx = (idx + 1) % steps.length;
+    statusEl.textContent = steps[idx];
+  }, 1500);
+  return { remove: () => { clearInterval(timer); row.remove(); } };
+}
+
+function systemNote(text, cls){
+  const row = document.createElement('div');
+  row.className = 'row system';
+  row.innerHTML = `<div class="sys-note ${cls}"></div>`;
+  row.firstChild.textContent = text;
+  convoEl.appendChild(row);
+  scrollDown();
+}
+
+function appendCartCard(display){
+  if(!display.base_products || !display.base_products.length) return;
+  const turn = agentTurnShell('Growth Agent');
+  const card = document.createElement('div');
+  card.className = 'agent-card';
+  const cap = document.createElement('div');
+  cap.className = 'card-caption';
+  cap.innerHTML = `Added to your cart.`;
+  card.appendChild(cap);
+  display.base_products.forEach(p => card.appendChild(productRow(p)));
+  turn.appendChild(card);
+  scrollDown();
+}
+
+function appendOfferCard(display, requestId){
+  const turn = agentTurnShell(null);
+  const card = document.createElement('div');
+  card.className = 'agent-card';
+
+  const pitch = document.createElement('div');
+  pitch.className = 'pitch';
+  pitch.textContent = display.offer_pitch || (display.offer_action === 'upsell' ? `Worth upgrading to ${display.offer_product.sub_commodity_desc}.` : `${display.offer_product.sub_commodity_desc} pairs well with this.`);
+  card.appendChild(pitch);
+  card.appendChild(productRow(display.offer_product));
+
+  if(display.offer_why_headline){
+    const why = document.createElement('div');
+    why.className = 'why-box';
+    const pct = Math.round((display.offer_p_accept || 0) * 100);
+    why.innerHTML = `<span class="why-pct">${pct}% match</span> for this household &mdash; ${display.offer_why_headline}.`;
+    const link = document.createElement('button');
+    link.className = 'why-link';
+    link.innerHTML = `Why this? <svg width="9" height="9" viewBox="0 0 24 24" fill="none"><path d="m6 9 6 6 6-6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+    link.addEventListener('click', () => why.classList.toggle('open'));
+    card.appendChild(link);
+    card.appendChild(why);
+  }
+
+  const actions = document.createElement('div');
+  actions.className = 'actions';
+  const declineBtn = document.createElement('button');
+  declineBtn.className = 'btn btn-ghost';
+  declineBtn.textContent = 'No thanks';
+  const base = (display.base_products && display.base_products[display.base_products.length - 1]) || null;
+  const delta = base ? (display.offer_product.price - base.price) : display.offer_product.price;
+  const acceptLabel = display.offer_action === 'upsell' ? `Upgrade — ${money(Math.max(delta,0))} more` : `Add — ${money(display.offer_product.price)}`;
+  const acceptBtn = document.createElement('button');
+  acceptBtn.className = 'btn btn-primary';
+  acceptBtn.textContent = acceptLabel;
+  actions.appendChild(declineBtn);
+  actions.appendChild(acceptBtn);
+  card.appendChild(actions);
+  turn.appendChild(card);
+  scrollDown();
+
+  const resolve = async (accepted) => {
+    if(busy) return;
+    busy = true;
+    acceptBtn.disabled = true; declineBtn.disabled = true;
+    systemNote(accepted ? 'You added it to your order' : 'You skipped this offer', accepted ? 'ok' : 'no');
+
+    const typing = showTyping(FINALIZING_STEPS);
+    try{
+      const res = await fetch('/api/checkout/resolve', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({request_id: requestId, accepted}),
+      });
+      typing.remove();
+      if(!res.ok){
+        systemNote('Sorry, something went wrong finishing that order.', 'err');
+        return;
+      }
+      const data = await res.json();
+      appendFinalCard(data.display || {});
+    } catch(e){
+      typing.remove();
+      systemNote('Could not reach the checkout service. Please try again.', 'err');
+    } finally {
+      busy = false;
+    }
+  };
+  acceptBtn.addEventListener('click', () => resolve(true));
+  declineBtn.addEventListener('click', () => resolve(false));
+}
+
+function appendFinalCard(display){
+  const turn = agentTurnShell('Order summary');
+  const card = document.createElement('div');
+  card.className = 'agent-card';
+
+  if(display.guardrail_note){
+    const g = document.createElement('div');
+    g.className = 'guardrail-card';
+    g.innerHTML = `<b>No add-on offered.</b> `;
+    g.appendChild(document.createTextNode(display.guardrail_note));
+    card.appendChild(g);
+  }
+
+  if(display.final_products && display.final_products.length){
+    const list = document.createElement('div');
+    list.className = 'receipt-list';
+    list.style.marginTop = display.guardrail_note ? '12px' : '0';
+    display.final_products.forEach(p => list.appendChild(productRow(p)));
+    card.appendChild(list);
+
+    const totalRow = document.createElement('div');
+    totalRow.className = 'receipt-total';
+    totalRow.innerHTML = `<span>Total</span><b>${money(display.final_total)}</b>`;
+    card.appendChild(totalRow);
+
+    if(Math.round(display.final_total*100) !== display.amount_paise){
+      const note = document.createElement('div');
+      note.className = 'receipt-note';
+      note.textContent = `Charged as ${display.amount_display} — rounded up to meet the test-mode minimum charge.`;
+      card.appendChild(note);
+    }
+  }
+
+  if(display.order_id && display.amount_display){
+    const payBtn = document.createElement('button');
+    payBtn.className = 'pay-btn';
+    payBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="none"><rect x="3" y="6" width="18" height="13" rx="2.4" stroke="#fff" stroke-width="1.8"/><path d="M3 10h18" stroke="#fff" stroke-width="1.8"/></svg> Pay ${display.amount_display} with Razorpay`;
+    card.appendChild(payBtn);
+
+    const outcomeSlot = document.createElement('div');
+    card.appendChild(outcomeSlot);
+    payBtn.addEventListener('click', () => openRazorpay(display, payBtn, outcomeSlot));
+  }
+
+  turn.appendChild(card);
+  scrollDown();
+}
+
+function showOutcome(slot, status, text){
+  slot.innerHTML = '';
+  const div = document.createElement('div');
+  const cls = status === 'completed' ? 'completed' : (status === 'abandoned' ? 'abandoned' : 'failed');
+  div.className = 'outcome ' + cls;
+  div.textContent = text;
+  slot.appendChild(div);
+  scrollDown();
+}
+
+function openRazorpay(display, payBtn, outcomeSlot){
+  if(typeof Razorpay === 'undefined'){
+    showOutcome(outcomeSlot, 'failed', "Razorpay's checkout script didn't load — check your connection and try again.");
+    return;
+  }
+  payBtn.disabled = true;
+  const options = {
+    key: RAZORPAY_KEY_ID,
+    amount: String(display.amount_paise),
+    currency: display.currency,
+    order_id: display.order_id,
+    name: "AI Merchant Growth Agent",
+    description: "Test Mode order",
+    handler: function(response){
+      fetch(CHECKOUT_ORIGIN + "/checkout/verify", {
+        method: "POST", headers: {"Content-Type":"application/json"},
+        body: JSON.stringify(response),
+      }).then(r => r.json()).then(data => {
+        payBtn.disabled = false;
+        if(data.verified && data.status === 'captured'){
+          showOutcome(outcomeSlot, 'completed', "Payment verified — your order is confirmed.");
+        } else {
+          showOutcome(outcomeSlot, 'failed', "Payment could not be confirmed. Any amount charged will be refunded automatically.");
+        }
+      }).catch(() => {
+        payBtn.disabled = false;
+        showOutcome(outcomeSlot, 'failed', "Couldn't reach the payment server to confirm this. If you were charged, it will be refunded automatically.");
+      });
+    },
+    modal: {
+      ondismiss: function(){
+        payBtn.disabled = false;
+        fetch(CHECKOUT_ORIGIN + "/checkout/abandoned", {
+          method: "POST", headers: {"Content-Type":"application/json"},
+          body: JSON.stringify({razorpay_order_id: display.order_id}),
+        }).catch(()=>{});
+        showOutcome(outcomeSlot, 'abandoned', "Checkout closed without completing payment.");
+      }
+    }
+  };
+  const rzp = new Razorpay(options);
+  rzp.on('payment.failed', function(response){
+    payBtn.disabled = false;
+    fetch(CHECKOUT_ORIGIN + "/checkout/failed", {
+      method: "POST", headers: {"Content-Type":"application/json"},
+      body: JSON.stringify(response.error),
+    }).catch(()=>{});
+    showOutcome(outcomeSlot, 'failed', "Your payment didn't go through. Any debited amount will be refunded in 4-5 business days.");
+  });
+  rzp.open();
+}
+
+async function sendMessage(){
+  if(busy) return;
+  const text = inputEl.value.trim();
+  if(!text) return;
+  inputEl.value = '';
+  busy = true;
+  sendBtn.disabled = true;
+  inputEl.disabled = true;
+
+  appendCustomerBubble(text);
+  const typing = showTyping(THINKING_STEPS);
+
+  try{
+    const res = await fetch('/api/checkout/start', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({intent: text, household_key: HOUSEHOLD_KEY}),
+    });
+    typing.remove();
+    if(!res.ok){
+      systemNote('Sorry, something went wrong with that request. Try rephrasing it.', 'err');
+      return;
+    }
+    const data = await res.json();
+    const display = data.display || {};
+    appendCartCard(display);
+    if(data.awaiting_reply && display.offer_product){
+      appendOfferCard(display, data.request_id);
+    } else {
+      appendFinalCard(display);
+    }
+  } catch(e){
+    typing.remove();
+    systemNote('Could not reach the growth agent. Please try again.', 'err');
+  } finally {
+    busy = false;
+    sendBtn.disabled = false;
+    inputEl.disabled = false;
+    inputEl.focus();
+  }
+}
+
+sendBtn.addEventListener('click', sendMessage);
+inputEl.addEventListener('keydown', e => { if(e.key === 'Enter') sendMessage(); });
+inputEl.focus();
+</script>
+</body>
+</html>

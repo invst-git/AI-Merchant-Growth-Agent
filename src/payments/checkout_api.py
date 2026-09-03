@@ -59,7 +59,10 @@ app = FastAPI()
 # as before, same-origin, CORS or not.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:8002", "http://127.0.0.1:8002"],
+    allow_origins=[
+        "http://localhost:8002", "http://127.0.0.1:8002",
+        "http://localhost:8003", "http://127.0.0.1:8003",
+    ],
     allow_methods=["POST"],
     allow_headers=["Content-Type"],
 )

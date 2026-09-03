@@ -27,6 +27,10 @@ product has one) as the static possibility space, and says explicitly
 that the real offer is computed per-request by get_growth_decision.
 """
 
+import math
+import re
+from collections import Counter
+
 import pandas as pd
 
 PRODUCT_LOOKUP_PATH = "models/product_lookup.parquet"
@@ -63,11 +67,72 @@ _COMPLEMENTS_BY_COMMODITY = {
 }
 
 
-def _match_score(query_tokens, text):
-    text_tokens = set(text.lower().split())
-    if not query_tokens:
-        return 0
-    return len(query_tokens & text_tokens) + (1 if any(t in text.lower() for t in query_tokens) else 0)
+# search() used to score a query by counting raw whitespace-split token
+# overlap. Two real bugs came from that: (1) ".split()" only breaks on
+# whitespace, so slash-joined category text like "BEERS/ALES" never
+# tokenized into {"beers","ales"}; (2) every matching word counted the
+# same regardless of how common it is, so one filler word in the query
+# (e.g. "pack") exactly matching a short, unrelated category name (e.g.
+# "TRAY PACK CARDS") could outscore a real match -- "I need a pack of
+# beers" was returning Valentine's Day gift cards instead of beer.
+#
+# Fixed with three changes: tokenize on any non-alphanumeric character
+# (not just whitespace); drop English filler words and very short
+# tokens, which are noise, not signal, in a category name; and weight
+# each matched token by its IDF (inverse document frequency) across the
+# whole catalogue, so a word that shows up in hundreds of unrelated
+# categories (like "pack") counts for far less than a word that's
+# specific to a narrow set of products (like "beer").
+_TOKEN_RE = re.compile(r"[a-z0-9]+")
+
+_STOPWORDS = {
+    "i", "a", "an", "the", "of", "for", "to", "my", "me", "we", "us", "you",
+    "your", "want", "wants", "wanted", "need", "needs", "needed", "would",
+    "like", "likes", "get", "gets", "got", "buy", "buys", "please", "some",
+    "any", "is", "are", "am", "was", "were", "be", "been", "being", "and",
+    "or", "in", "on", "at", "with", "this", "that", "it", "its", "just",
+    "can", "could", "will", "shall", "do", "does", "did", "have", "has",
+    "had", "not", "no", "yes", "ok", "okay", "so", "if", "then", "than",
+    "too", "also", "very", "really", "much", "many", "more", "most", "make",
+    "makes", "making", "from", "by", "as", "about", "into", "up", "out",
+    "tonight", "today",
+}
+
+
+def _stem(token):
+    # cheap plural fold ("beers" -> "beer") -- not real stemming, just
+    # enough to match singular/plural phrasing without a dependency.
+    return token[:-1] if token.endswith("s") and len(token) > 3 else token
+
+
+def _tokenize(text):
+    raw = _TOKEN_RE.findall(text.lower())
+    return {_stem(t) for t in raw if len(t) >= 3 and t not in _STOPWORDS}
+
+
+# Precomputed once at import time, not per search() call -- this catalogue
+# backs a live conversational checkout with a real latency budget, so the
+# per-product token sets and the corpus-wide document frequencies are
+# built once here and reused on every search.
+_CATEGORY_TOKENS = {
+    pid: _tokenize(f"{row['commodity_desc']} {row['sub_commodity_desc']}")
+    for pid, row in PRODUCTS.iterrows()
+}
+_DOC_FREQ = Counter()
+for _tokens in _CATEGORY_TOKENS.values():
+    _DOC_FREQ.update(_tokens)
+_N_PRODUCTS = len(PRODUCTS)
+_IDF = {
+    token: math.log((_N_PRODUCTS + 1) / (df + 0.5)) + 1.0
+    for token, df in _DOC_FREQ.items()
+}
+
+
+def _match_score(query_tokens, category_tokens):
+    matched = query_tokens & category_tokens
+    if not matched:
+        return 0.0
+    return sum(_IDF.get(t, 0.0) for t in matched)
 
 
 def build_entry(product_id):
@@ -96,11 +161,11 @@ def build_entry(product_id):
 
 
 def search(query, max_results=5):
-    query_tokens = set(query.lower().split())
+    query_tokens = _tokenize(query)
     scored = []
-    for pid, row in PRODUCTS.iterrows():
-        score = _match_score(query_tokens, f"{row['commodity_desc']} {row['sub_commodity_desc']}")
+    for pid, category_tokens in _CATEGORY_TOKENS.items():
+        score = _match_score(query_tokens, category_tokens)
         if score > 0:
-            scored.append((score, row["price"], pid))
+            scored.append((score, PRODUCTS.at[pid, "price"], pid))
     scored.sort(key=lambda x: (-x[0], x[1]))
     return [build_entry(pid) for _, _, pid in scored[:max_results]]

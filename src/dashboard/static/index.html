@@ -7,7 +7,6 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
 <style>
   :root{
     --bg:#f6f6f9; --sidebar-bg:#ffffff; --topbar-bg:#ffffff; --card:#ffffff;
@@ -238,54 +237,6 @@
   .modal-row{display:flex; justify-content:space-between; align-items:center; padding:9px 0; border-bottom:1px solid var(--line);}
   .modal-row:last-child{border-bottom:none;}
 
-  /* ---- conversational checkout ---- */
-  .chat-shell{display:flex; flex-direction:column; height:calc(100vh - 210px); min-height:420px; overflow:hidden; padding:0;}
-  .chat-persona{display:flex; align-items:center; gap:10px; padding:14px 18px; border-bottom:1px solid var(--line); flex-shrink:0;}
-  .persona-dot{width:9px; height:9px; border-radius:50%; background:var(--green-ink); box-shadow:0 0 0 3px var(--green-bg); flex-shrink:0;}
-  .persona-name{font-weight:700; font-size:13px;}
-  .persona-sub{font-size:11.5px; color:var(--muted); margin-top:1px;}
-  .chat-thread{flex:1; overflow-y:auto; padding:18px; display:flex; flex-direction:column; gap:14px;}
-  .chat-empty{margin:auto; text-align:center; color:var(--faint); font-size:12.5px; max-width:320px; line-height:1.6;}
-  .chat-row{display:flex; max-width:78%;}
-  .chat-row.from-customer{align-self:flex-end; justify-content:flex-end;}
-  .chat-row.from-merchant{align-self:flex-start;}
-  .chat-bubble{border-radius:var(--radius-md); padding:11px 14px; font-size:13px; line-height:1.55;}
-  .chat-row.from-customer .chat-bubble{background:var(--indigo); color:#fff; border-bottom-right-radius:4px;}
-  .chat-row.from-merchant .chat-bubble{background:var(--card); border:1px solid var(--line); border-bottom-left-radius:4px; box-shadow:var(--shadow);}
-  .chat-row.from-merchant .chat-bubble .hl-num{color:var(--indigo-ink);}
-  .chat-tag{font-size:10px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--faint); margin-bottom:5px;}
-  .chat-typing{align-self:flex-start; display:flex; gap:4px; padding:14px; background:var(--card); border:1px solid var(--line); border-radius:var(--radius-md); border-bottom-left-radius:4px; box-shadow:var(--shadow); width:fit-content;}
-  .chat-typing span{width:6px; height:6px; border-radius:50%; background:var(--faint); display:inline-block; animation:chatTypingBounce 1.1s infinite ease-in-out;}
-  .chat-typing span:nth-child(2){animation-delay:.15s;}
-  .chat-typing span:nth-child(3){animation-delay:.3s;}
-  @keyframes chatTypingBounce{0%,60%,100%{opacity:.3; transform:translateY(0);} 30%{opacity:1; transform:translateY(-3px);}}
-  .chat-offer-actions{align-self:flex-start; display:flex; gap:8px; margin-top:-4px;}
-  .chat-btn{border-radius:var(--radius-sm); padding:7px 14px; font-size:12px; font-weight:700; cursor:pointer; border:1px solid var(--line); background:#fff; font-family:inherit;}
-  .chat-btn.accept{color:var(--green-ink); border-color:#bbe9cc;}
-  .chat-btn.accept:hover{background:var(--green-bg);}
-  .chat-btn.decline{color:var(--rose-ink); border-color:#f3bcbc;}
-  .chat-btn.decline:hover{background:var(--rose-bg);}
-  .chat-final{align-self:flex-start; margin-top:-4px;}
-  .chat-pay-btn{display:inline-flex; align-items:center; gap:6px; background:var(--indigo); color:#fff; border:none; border-radius:var(--radius-sm); padding:9px 16px; font-size:12.5px; font-weight:700; cursor:pointer; text-decoration:none;}
-  .chat-input-row{display:flex; gap:10px; padding:14px 18px; border-top:1px solid var(--line); flex-shrink:0;}
-  .chat-input-row input{flex:1; border:1px solid var(--line); border-radius:var(--radius-sm); padding:10px 14px; font-size:13px; font-family:inherit; outline:none;}
-  .chat-input-row input:focus{border-color:var(--indigo);}
-  .btn-send{background:var(--indigo); color:#fff; border:none; border-radius:var(--radius-sm); padding:0 20px; font-size:13px; font-weight:700; cursor:pointer; font-family:inherit;}
-  .btn-send:disabled{opacity:.5; cursor:default;}
-
-  .chat-card{background:var(--card); border:1px solid var(--line); border-radius:var(--radius-md); border-bottom-left-radius:4px; box-shadow:var(--shadow); padding:12px 14px; font-size:13px;}
-  .chat-card-row{display:flex; justify-content:space-between; align-items:baseline; gap:14px; padding:4px 0;}
-  .chat-card-row + .chat-card-row{border-top:1px solid var(--line);}
-  .chat-card-name{font-weight:600;}
-  .chat-card-price{font-weight:700; color:var(--indigo-ink); white-space:nowrap;}
-  .chat-card-tag{margin-top:6px; font-size:10.5px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--green-ink);}
-  .chat-card-offer{border-color:var(--indigo); border-width:1.5px;}
-  .chat-card-total .chat-card-total-row{font-weight:700; padding-top:8px; margin-top:2px; border-top:1.5px solid var(--line);}
-  .chat-why-link{margin-top:8px; border:none; background:none; padding:0; font-size:11.5px; font-weight:700; color:var(--indigo-ink); cursor:pointer; font-family:inherit;}
-  .chat-why-detail{margin-top:8px; padding-top:8px; border-top:1px solid var(--line); font-size:12px;}
-  .chat-card-status-completed{color:var(--green-ink); border-color:#bbe9cc; background:var(--green-bg);}
-  .chat-card-status-failed{color:var(--rose-ink); border-color:#f3bcbc; background:var(--rose-bg);}
-  .chat-card-status-abandoned{color:var(--amber-ink); border-color:#f6dfa8; background:var(--amber-bg);}
   .why-box.blocked{background:var(--slate-bg);}
   .why-box.blocked .wl{color:var(--muted);}
   .why-box.blocked .wq{color:var(--ink);}
@@ -298,7 +249,6 @@
     <div class="ttabs">
       <button class="ttab active" data-view="transactions">Transactions</button>
       <button class="ttab" data-view="aggregate">Aggregate Results</button>
-      <button class="ttab" data-view="checkout">Conversational Checkout</button>
     </div>
     <div class="topbar-right">
       <span class="badge-testmode" id="mode-badge">RAZORPAY TEST MODE</span>
@@ -314,7 +264,6 @@
         <div class="side-label">Views</div>
         <button class="nav-item active" data-view="transactions">Per-Transaction</button>
         <button class="nav-item" data-view="aggregate">Aggregate</button>
-        <button class="nav-item" data-view="checkout">Checkout</button>
       </div>
 
       <div class="side-section" id="filters-section">
@@ -385,29 +334,6 @@
         <div id="agg-body" style="display:none"></div>
       </div>
 
-      <!-- ================= CHECKOUT VIEW (conversational) ================= -->
-      <div class="view" id="view-checkout">
-        <div class="page-head">
-          <h2>Conversational Checkout</h2>
-          <div class="sub">Same catalogue, same growth engine - reached by typing instead of the CLI</div>
-        </div>
-        <div class="chat-shell card">
-          <div class="chat-persona">
-            <span class="persona-dot"></span>
-            <div>
-              <div class="persona-name">Signed in as Household 1060</div>
-              <div class="persona-sub">age 35-44 &middot; 2 adults, no kids &middot; avg basket $95.26</div>
-            </div>
-          </div>
-          <div class="chat-thread" id="chat-thread">
-            <div class="chat-empty" id="chat-empty">Say what you're shopping for, in your own words - e.g. "I want to make spaghetti for dinner tonight."</div>
-          </div>
-          <div class="chat-input-row">
-            <input type="text" id="chat-input" placeholder="Type what you'd like to buy&hellip;" autocomplete="off">
-            <button class="btn-send" id="chat-send">Send</button>
-          </div>
-        </div>
-      </div>
     </main>
   </div>
 </div>
@@ -421,6 +347,11 @@
 
 <script>
 const fmtMoney = (v, d=2) => (v==null ? '-' : (v<0?'-':'') + '$' + Math.abs(v).toFixed(d));
+// Real per-transaction money is INR (see dashboard_api.py's USD_TO_INR --
+// this data already arrives converted). The Aggregate view below reads a
+// simulated Phase 5 experiment straight off data/experiment/*.parquet and
+// intentionally keeps using fmtMoney/$ above, unconverted.
+const fmtINR = (v, d=2) => (v==null ? '-' : (v<0?'-':'') + '₹' + Math.abs(v).toFixed(d));
 const fmtPct = (v, d=1) => v==null ? '-' : (v>=0?'+':'') + v.toFixed(d) + '%';
 const titleCase = s => s ? s.replace(/_/g,' ').replace(/\w\S*/g, t => t[0].toUpperCase()+t.slice(1)) : s;
 const esc = s => (s==null?'':String(s)).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -429,7 +360,7 @@ const esc = s => (s==null?'':String(s)).replace(/[&<>"']/g, c => ({'&':'&amp;','
 // highlighted span -- used for both the why-this-offer text and the audit
 // trail timeline, so the real numbers driving a decision stand out.
 const hlNums = t => t
-  .replace(/(\$-?\d[\d,]*\.?\d*)/g, '<span class="hl-num">$1</span>')
+  .replace(/([$₹]-?\d[\d,]*\.?\d*)/g, '<span class="hl-num">$1</span>')
   .replace(/(-?\d+(\.\d+)?%)/g, '<span class="hl-num">$1</span>')
   .replace(/\blift\s+-?\d+(\.\d+)?/gi, m => `<span class="hl-num">${m}</span>`);
 
@@ -670,23 +601,23 @@ function renderTxDetail(t) {
     <div class="flow-row">
       <div class="flow-card card">
         <div class="flow-head"><span class="step-num">1</span><span class="flow-title">Original Basket (Observed)</span></div>
-        <div class="basket-big">${t.basket_before.items} item${t.basket_before.items===1?'':'s'} &middot; ${fmtMoney(t.basket_before.value)}</div>
+        <div class="basket-big">${t.basket_before.items} item${t.basket_before.items===1?'':'s'} &middot; ${fmtINR(t.basket_before.value)}</div>
         <div class="basket-lines">
           <div class="basket-more">Base product${t.basket_before.items===1?'':'s'} from the buyer's request, priced from the real catalogue.</div>
         </div>
-        <div class="basket-subtotal"><span>Basket Subtotal</span><span>${fmtMoney(t.basket_before.value)}</span></div>
+        <div class="basket-subtotal"><span>Basket Subtotal</span><span>${fmtINR(t.basket_before.value)}</span></div>
       </div>
       <div class="h-arrow">&#8594;</div>
       <div class="flow-card card">
         <div class="flow-head"><span class="step-num">2</span><span class="flow-title">Agent Decision</span>${actionBadge(offer)}</div>
         <div class="label" style="margin-bottom:2px;">Decision Type</div>
         <div class="offer-line">${esc(decisionType)}${offer && !offer.bound_rejected && offer.action !== 'no_action' ? '' : ''}</div>
-        ${offer && !offer.bound_rejected && offer.action !== 'no_action' ? `<div class="muted" style="font-size:11.5px; margin-top:-6px; margin-bottom:10px;">${esc(offerLine)}${offer.product ? ' - ' + fmtMoney(offer.product.price) : ''}</div>` : ''}
+        ${offer && !offer.bound_rejected && offer.action !== 'no_action' ? `<div class="muted" style="font-size:11.5px; margin-top:-6px; margin-bottom:10px;">${esc(offerLine)}${offer.product ? ' - ' + fmtINR(offer.product.price) : ''}</div>` : ''}
         ${whyHeadline ? (() => { const wb = whyBoxMeta(offer); return `<div class="why-box${wb.blocked ? ' blocked' : ''}"><div class="wl">${esc(wb.label)}</div><div class="wq">${hlNums(esc(whyHeadline))}</div></div>`; })() : ''}
         ${whyFull ? `<div style="margin-bottom:10px;"><button class="link-btn" id="toggle-reason">Show full model reasoning &rarr;</button><div class="full-reason" id="full-reason">${formatReasonFull(whyFull)}</div></div>` : ''}
         <div class="stat-grid">
           ${offer && offer.p_accept != null ? `<div class="stat"><span class="label">Expected Accept Prob.</span><span class="v">${(offer.p_accept*100).toFixed(0)}%</span></div>` : `<div class="stat"><span class="label">Expected Accept Prob.</span><span class="v">-;</span></div>`}
-          <div class="stat"><span class="label">Expected Incremental Value</span><span class="v">${offer ? fmtMoney(offer.expected_incremental_value ?? 0) : '-'}</span></div>
+          <div class="stat"><span class="label">Expected Incremental Value</span><span class="v">${offer ? fmtINR(offer.expected_incremental_value ?? 0) : '-'}</span></div>
         </div>
       </div>
       <div class="h-arrow">&#8594;</div>
@@ -695,18 +626,18 @@ function renderTxDetail(t) {
         <div class="outcome-line">${esc(t.outcome_text || '')}</div>
         <div class="final-basket-box">
           <div class="fb-head">Final Basket (Post-Offer)</div>
-          <div style="font-size:12px; color:var(--muted);">${t.basket_after.items} item${t.basket_after.items===1?'':'s'} &middot; ${fmtMoney(t.basket_after.value)}</div>
-          ${t.basket_after.value !== t.basket_before.value ? `<div class="fb-added"><span>+ ${offer && offer.product ? esc(offer.product.sub_commodity_desc) : 'item added'}</span><span>${fmtMoney(t.basket_after.value - t.basket_before.value)}</span></div>` : ''}
-          <div class="fb-total"><span>Order Total</span><span>${fmtMoney(t.basket_after.value)}</span></div>
+          <div style="font-size:12px; color:var(--muted);">${t.basket_after.items} item${t.basket_after.items===1?'':'s'} &middot; ${fmtINR(t.basket_after.value)}</div>
+          ${t.basket_after.value !== t.basket_before.value ? `<div class="fb-added"><span>+ ${offer && offer.product ? esc(offer.product.sub_commodity_desc) : 'item added'}</span><span>${fmtINR(t.basket_after.value - t.basket_before.value)}</span></div>` : ''}
+          <div class="fb-total"><span>Order Total</span><span>${fmtINR(t.basket_after.value)}</span></div>
         </div>
       </div>
     </div>
 
     <div class="summary-card card">
       <div class="flow-title" style="margin-bottom:10px;">Transaction Summary</div>
-      <div class="summary-row"><span class="k">Base Basket Value</span><span class="v">${fmtMoney(t.basket_before.value)}</span></div>
-      <div class="summary-row"><span class="k">Incremental Value</span><span class="v">${offer ? fmtMoney(offer.expected_incremental_value ?? 0) : '$0.00'}</span></div>
-      <div class="summary-row"><span class="k">Order Value</span><span class="v">${fmtMoney(t.basket_after.value)}</span></div>
+      <div class="summary-row"><span class="k">Base Basket Value</span><span class="v">${fmtINR(t.basket_before.value)}</span></div>
+      <div class="summary-row"><span class="k">Incremental Value</span><span class="v">${offer ? fmtINR(offer.expected_incremental_value ?? 0) : '₹0.00'}</span></div>
+      <div class="summary-row"><span class="k">Order Value</span><span class="v">${fmtINR(t.basket_after.value)}</span></div>
       <div class="summary-row"><span class="k">Items Added</span><span class="v">${t.basket_after.items - t.basket_before.items}</span></div>
       <div class="summary-row"><span class="k">Attach Rate</span><span class="v">${attachRate}</span></div>
       <div class="summary-row"><span class="k">Decision</span><span class="v">${esc(offer ? offer.action : 'none')}</span></div>
@@ -1027,244 +958,6 @@ async function silentRefresh() {
     // transient network hiccup -- next tick retries, nothing to show the user
   }
 }
-
-// ---------------- conversational checkout ----------------
-// Reuses the same catalogue and growth-decision engine as the CLI demo
-// (src/agents/demo_graph.py) via /api/checkout/start and /api/checkout/
-// resolve -- the customer never types a product id or a household key,
-// only natural language. Household is fixed for the session ("signed in
-// as") rather than asked in-chat, same as any real checkout. Every turn
-// still writes to data/audit_log.jsonl, so a chat-triggered transaction
-// shows up in the Transactions view on the next silentRefresh tick with
-// no extra plumbing.
-let CHAT_HOUSEHOLD = 1060;
-let CHAT_PENDING_RID = null;
-let CHAT_BUSY = false;
-
-function chatAppendRow(html, cls) {
-  const empty = document.getElementById('chat-empty');
-  if (empty) empty.remove();
-  const thread = document.getElementById('chat-thread');
-  const row = document.createElement('div');
-  row.className = cls;
-  row.innerHTML = html;
-  thread.appendChild(row);
-  thread.scrollTop = thread.scrollHeight;
-  return row;
-}
-
-// Customer's own outgoing messages only -- what the merchant "says" is
-// never shown as prose (see chatRenderProductCards/chatRenderFinal
-// below): the buyer/merchant agents' own reply text is written to be an
-// audit record, not a chat message (see merchant_agent.py's own prompt),
-// so a real customer never sees it here. They see product, price, and a
-// decision -- the reasoning behind an offer is one explicit tap away
-// (chatWhyBlock), never dropped on them by default.
-function chatBubble(text, from) {
-  return chatAppendRow(`<div class="chat-bubble">${esc(text)}</div>`, 'chat-row from-' + from);
-}
-
-function chatShowTyping() {
-  return chatAppendRow('<span></span><span></span><span></span>', 'chat-typing');
-}
-
-function chatErrorCard(text) {
-  return chatAppendRow(`<div class="chat-card chat-card-status-failed">${esc(text)}</div>`, 'chat-row from-merchant');
-}
-
-function chatProductRow(p) {
-  return `<div class="chat-card-row"><span class="chat-card-name">${esc(p.sub_commodity_desc)}</span><span class="chat-card-price">${fmtMoney(p.price)}</span></div>`;
-}
-
-function chatWhyBlock(display) {
-  if (!display.offer_why_full) return '';
-  return `<button class="chat-why-link" type="button" onclick="const d=this.nextElementSibling; d.hidden=!d.hidden; this.textContent = d.hidden ? 'Why this offer?' : 'Hide reasoning';">Why this offer?</button>` +
-         `<div class="chat-why-detail" hidden>${formatReasonFull(display.offer_why_full)}</div>`;
-}
-
-function chatRenderProductCards(products, tag) {
-  if (!products || !products.length) return;
-  const rows = products.map(chatProductRow).join('');
-  chatAppendRow(`<div class="chat-card">${rows}<div class="chat-card-tag">${esc(tag)}</div></div>`, 'chat-row from-merchant');
-}
-
-async function sendChatMessage() {
-  if (CHAT_BUSY) return;
-  const input = document.getElementById('chat-input');
-  const text = input.value.trim();
-  if (!text) return;
-  input.value = '';
-  CHAT_BUSY = true;
-  document.getElementById('chat-send').disabled = true;
-
-  chatBubble(text, 'customer');
-  const typing = chatShowTyping();
-
-  try {
-    const res = await fetch('/api/checkout/start', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({intent: text, household_key: CHAT_HOUSEHOLD}),
-    });
-    typing.remove();
-    if (!res.ok) {
-      chatErrorCard('Sorry, something went wrong. Please try again.');
-      return;
-    }
-    chatRenderTurn(await res.json());
-  } catch (e) {
-    typing.remove();
-    chatErrorCard('Could not reach the merchant. Please try again.');
-  } finally {
-    CHAT_BUSY = false;
-    document.getElementById('chat-send').disabled = false;
-    input.focus();
-  }
-}
-
-function chatRenderTurn(data) {
-  const display = data.display || {};
-  chatRenderProductCards(display.base_products, 'Added to cart');
-
-  if (data.awaiting_reply && display.offer_product) {
-    chatAppendRow(
-      `<div class="chat-card chat-card-offer">${chatProductRow(display.offer_product)}${chatWhyBlock(display)}</div>`,
-      'chat-row from-merchant'
-    );
-    CHAT_PENDING_RID = data.request_id;
-    chatAppendRow(
-      '<button class="chat-btn accept" onclick="chatResolveOffer(true)">Add to cart</button>' +
-      '<button class="chat-btn decline" onclick="chatResolveOffer(false)">Skip</button>',
-      'chat-offer-actions'
-    );
-    return;
-  }
-  chatRenderFinal(data);
-}
-
-async function chatResolveOffer(accepted) {
-  if (CHAT_BUSY || !CHAT_PENDING_RID) return;
-  const rid = CHAT_PENDING_RID;
-  CHAT_PENDING_RID = null;
-  CHAT_BUSY = true;
-
-  document.querySelectorAll('.chat-offer-actions').forEach(el => el.remove());
-  chatBubble(accepted ? 'Add it to my order.' : "I'll skip that.", 'customer');
-  const typing = chatShowTyping();
-
-  try {
-    const res = await fetch('/api/checkout/resolve', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({request_id: rid, accepted}),
-    });
-    typing.remove();
-    if (!res.ok) {
-      chatErrorCard('Sorry, could not finish that. Please try again.');
-      return;
-    }
-    chatRenderFinal(await res.json());
-  } catch (e) {
-    typing.remove();
-    chatErrorCard('Could not reach the merchant. Please try again.');
-  } finally {
-    CHAT_BUSY = false;
-  }
-}
-
-function chatRenderFinal(data) {
-  const display = data.display || {};
-  if (display.final_products && display.final_products.length) {
-    const rows = display.final_products.map(chatProductRow).join('');
-    const total = `<div class="chat-card-row chat-card-total-row"><span>Order total</span><span class="chat-card-price">${fmtMoney(display.final_total)}</span></div>`;
-    chatAppendRow(`<div class="chat-card chat-card-total">${rows}${total}</div>`, 'chat-row from-merchant');
-  }
-  if (display.order_id && display.checkout_url) {
-    const row = chatAppendRow(`<button class="chat-pay-btn" type="button">Pay ${esc(display.amount_display || '')} with Razorpay</button>`, 'chat-final');
-    const btn = row.querySelector('.chat-pay-btn');
-    btn.addEventListener('click', () => chatOpenPayment(display, btn));
-  }
-}
-
-// ---- inline Razorpay Test Mode checkout, opened right in this tab ----
-// Standard Checkout is a JS modal by design (Razorpay's own integration
-// docs), not a hosted page -- checkout_api.py's own /checkout/{order_id}
-// page (used by the CLI's printed link) exists only to keep signature
-// verification and capture on a small deterministic server, away from
-// any agent. This reuses that exact same server-side logic (verify /
-// failed / abandoned, unchanged) over CORS, so paying never leaves the
-// conversation for a separate localhost tab.
-let RAZORPAY_KEY_ID = null;
-async function chatEnsureRazorpayKey() {
-  if (RAZORPAY_KEY_ID) return RAZORPAY_KEY_ID;
-  const res = await fetch('/api/checkout/razorpay-key');
-  if (!res.ok) throw new Error('razorpay key unavailable');
-  const data = await res.json();
-  RAZORPAY_KEY_ID = data.key_id;
-  return RAZORPAY_KEY_ID;
-}
-
-function chatShowPaymentResult(status) {
-  const copy = {
-    completed: 'Payment received - thank you!',
-    failed: "Payment didn't go through. You can try again from the button above.",
-    abandoned: 'Checkout closed - your order is still saved if you want to finish paying later.',
-  };
-  chatAppendRow(`<div class="chat-card chat-card-status-${status}">${esc(copy[status] || copy.failed)}</div>`, 'chat-row from-merchant');
-}
-
-async function chatOpenPayment(order, btn) {
-  if (btn) btn.disabled = true;
-  let keyId;
-  try {
-    keyId = await chatEnsureRazorpayKey();
-  } catch (e) {
-    if (btn) btn.disabled = false;
-    chatErrorCard('Could not start payment right now.');
-    return;
-  }
-
-  const options = {
-    key: keyId,
-    amount: String(order.amount_paise),
-    currency: order.currency || 'INR',
-    order_id: order.order_id,
-    name: 'AI Merchant Growth Agent (Test Mode)',
-    handler: function (response) {
-      fetch('http://localhost:8001/checkout/verify', {
-        method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(response),
-      }).then(r => r.json()).then(data => {
-        const ok = data.status === 'captured';
-        chatShowPaymentResult(ok ? 'completed' : 'failed');
-        if (!ok && btn) btn.disabled = false;
-      }).catch(() => { chatShowPaymentResult('failed'); if (btn) btn.disabled = false; });
-    },
-    modal: {
-      ondismiss: function () {
-        fetch('http://localhost:8001/checkout/abandoned', {
-          method: 'POST', headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({razorpay_order_id: order.order_id}),
-        }).catch(() => {});
-        chatShowPaymentResult('abandoned');
-        if (btn) btn.disabled = false;
-      },
-    },
-  };
-  const rzp = new Razorpay(options);
-  rzp.on('payment.failed', function (response) {
-    fetch('http://localhost:8001/checkout/failed', {
-      method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(response.error),
-    }).catch(() => {});
-    chatShowPaymentResult('failed');
-    if (btn) btn.disabled = false;
-  });
-  rzp.open();
-}
-
-document.getElementById('chat-send').addEventListener('click', sendChatMessage);
-document.getElementById('chat-input').addEventListener('keydown', e => {
-  if (e.key === 'Enter') sendChatMessage();
-});
 
 setActiveView('transactions');
 loadTransactions();

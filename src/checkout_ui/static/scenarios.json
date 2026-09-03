@@ -1,0 +1,202 @@
+[
+  {
+    "id": "cheese_cross_sell",
+    "title": "Specialty cheese",
+    "subtitle": "Cross-sell offer · Deli Meats",
+    "household_key": 1060,
+    "customer_message": "I'd like to buy the specialty prepackaged cheese.",
+    "base_products": [
+      {
+        "product_id": 1073515,
+        "commodity_desc": "Cheeses",
+        "sub_commodity_desc": "Cheese:Specialty Prepack",
+        "price": 4.29
+      }
+    ],
+    "offer": {
+      "action": "cross_sell",
+      "product": {
+        "product_id": 933835,
+        "commodity_desc": "Deli Meats",
+        "sub_commodity_desc": "Meat: Saus Dry Bulk",
+        "price": 3.3805440742302824
+      },
+      "p_accept": 0.8376331575078559,
+      "why_headline": "customers who buy Cheeses buy Deli Meats 63% of the time (lift 10.2)",
+      "why_full": "estimated accept probability 84% (logistic-trained acceptance model; top drivers: confidence (+2.13), avg_basket_value (+0.79)); 84% accept x ($3.38 incremental x 30% margin proxy) - $0.20 downside = $0.649 expected value"
+    },
+    "branches": {
+      "accepted": {
+        "final_products": [
+          {
+            "product_id": 1073515,
+            "commodity_desc": "Cheeses",
+            "sub_commodity_desc": "Cheese:Specialty Prepack",
+            "price": 4.29
+          },
+          {
+            "product_id": 933835,
+            "commodity_desc": "Deli Meats",
+            "sub_commodity_desc": "Meat: Saus Dry Bulk",
+            "price": 3.3805440742302824
+          }
+        ],
+        "final_total": 7.670544074230282,
+        "order_id": "order_TWVdOlABs9N24N",
+        "amount_paise": 767,
+        "amount_display": "INR 7.67",
+        "currency": "INR",
+        "checkout_url": "http://localhost:8001/checkout/order_TWVdOlABs9N24N?amount=767&currency=INR"
+      },
+      "declined": {
+        "final_products": [
+          {
+            "product_id": 1073515,
+            "commodity_desc": "Cheeses",
+            "sub_commodity_desc": "Cheese:Specialty Prepack",
+            "price": 4.29
+          }
+        ],
+        "final_total": 4.29,
+        "order_id": "order_TWVdoGTOd0nGp1",
+        "amount_paise": 429,
+        "amount_display": "INR 4.29",
+        "currency": "INR",
+        "checkout_url": "http://localhost:8001/checkout/order_TWVdoGTOd0nGp1?amount=429&currency=INR"
+      }
+    }
+  },
+  {
+    "id": "beer_upsell",
+    "title": "Beer, six-pack",
+    "subtitle": "Upsell offer · premium upgrade",
+    "household_key": 1060,
+    "customer_message": "I'd like to buy a six-pack of the usual beer.",
+    "base_products": [
+      {
+        "product_id": 1683513,
+        "commodity_desc": "Beers/Ales",
+        "sub_commodity_desc": "Beeralemalt Liquors",
+        "price": 10.24
+      }
+    ],
+    "offer": {
+      "action": "upsell",
+      "product": {
+        "product_id": 1602110,
+        "commodity_desc": "Beers/Ales",
+        "sub_commodity_desc": "Beeralemalt Liquors",
+        "price": 13.49
+      },
+      "p_accept": 0.6,
+      "why_headline": "upsell from product 1683513 to 1602110 (same manufacturer as the item in cart), +$3.25",
+      "why_full": "accept probability 60% (price-ratio heuristic x gbm-trained household trade-up propensity, top drivers: avg_basket_value (+0.24), national_brand_rate_other (+0.21)); 60% accept x ($3.25 incremental x 30% margin proxy) - $0.20 downside = $0.385 expected value"
+    },
+    "branches": {
+      "accepted": {
+        "final_products": [
+          {
+            "product_id": 1683513,
+            "commodity_desc": "Beers/Ales",
+            "sub_commodity_desc": "Beeralemalt Liquors",
+            "price": 10.24
+          },
+          {
+            "product_id": 1602110,
+            "commodity_desc": "Beers/Ales",
+            "sub_commodity_desc": "Beeralemalt Liquors",
+            "price": 13.49
+          }
+        ],
+        "final_total": 23.73,
+        "order_id": "order_TWVe3WChjaZzkZ",
+        "amount_paise": 2373,
+        "amount_display": "INR 23.73",
+        "currency": "INR",
+        "checkout_url": "http://localhost:8001/checkout/order_TWVe3WChjaZzkZ?amount=2373&currency=INR"
+      },
+      "declined": {
+        "final_products": [
+          {
+            "product_id": 1683513,
+            "commodity_desc": "Beers/Ales",
+            "sub_commodity_desc": "Beeralemalt Liquors",
+            "price": 10.24
+          }
+        ],
+        "final_total": 10.24,
+        "order_id": "order_TWVfXlWnkwEItZ",
+        "amount_paise": 1024,
+        "amount_display": "INR 10.24",
+        "currency": "INR",
+        "checkout_url": "http://localhost:8001/checkout/order_TWVfXlWnkwEItZ?amount=1024&currency=INR"
+      }
+    }
+  },
+  {
+    "id": "spaghetti_no_offer",
+    "title": "Spaghetti dinner",
+    "subtitle": "No offer · guardrail blocked a mismatch",
+    "household_key": 1060,
+    "customer_message": "I want to make spaghetti for dinner tonight.",
+    "base_products": [
+      {
+        "product_id": 5995213,
+        "commodity_desc": "Hispanic",
+        "sub_commodity_desc": "Authentic Pasta Rice Beans",
+        "price": 0.32666666666666666
+      }
+    ],
+    "offer": null,
+    "guardrail_note": "The model's top-ranked candidate (beef) was blocked because it isn't a catalogue-declared complement for this basket, so no offer was shown.",
+    "final": {
+      "final_products": [
+        {
+          "product_id": 5995213,
+          "commodity_desc": "Hispanic",
+          "sub_commodity_desc": "Authentic Pasta Rice Beans",
+          "price": 0.32666666666666666
+        }
+      ],
+      "final_total": 0.32666666666666666,
+      "order_id": "order_TWVeNhBsFgKTeq",
+      "amount_paise": 100,
+      "amount_display": "INR 1.00",
+      "currency": "INR",
+      "checkout_url": "http://localhost:8001/checkout/order_TWVeNhBsFgKTeq?amount=100&currency=INR"
+    }
+  },
+  {
+    "id": "cigarettes_no_offer",
+    "title": "Pack of cigarettes",
+    "subtitle": "No offer · nothing scored",
+    "household_key": 1060,
+    "customer_message": "I need a pack of cigarettes.",
+    "base_products": [
+      {
+        "product_id": 599207,
+        "commodity_desc": "Cigarettes",
+        "sub_commodity_desc": "Cigarettes",
+        "price": 0.37
+      }
+    ],
+    "offer": null,
+    "guardrail_note": null,
+    "final": {
+      "final_products": [
+        {
+          "product_id": 599207,
+          "commodity_desc": "Cigarettes",
+          "sub_commodity_desc": "Cigarettes",
+          "price": 0.37
+        }
+      ],
+      "final_total": 0.37,
+      "order_id": "order_TWVehUACm9vOs0",
+      "amount_paise": 100,
+      "amount_display": "INR 1.00",
+      "currency": "INR",
+      "checkout_url": "http://localhost:8001/checkout/order_TWVehUACm9vOs0?amount=100&currency=INR"
+    }
+  }
+]
