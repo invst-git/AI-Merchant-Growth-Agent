@@ -18,6 +18,11 @@ A separate rule checks every offer before it is shown, and blocks anything the c
 
 Payment runs on Razorpay's real Test Mode. Orders are created through Razorpay's own official server for AI agents, rather than a hand-built API call, and the customer completes a real Razorpay checkout, with the payment verified and confirmed the same way a live payment would be.
 
+## High Level Architecture Overview
+<img width="1375" height="1019" alt="image" src="https://github.com/user-attachments/assets/cda1992a-899b-42ac-a7d6-aa6b23eb7a58" />
+
+The dunnhumby “Complete Journey” dataset is processed once, offline, into a real-time Catalogue (91,357 products) and a pair of Trained Models (a cross-sell acceptance model and an upsell propensity model, both explained per-decision with SHAP). The Decision Core combines them into one score, EV = p_accept × (Δvalue × margin) - downside, and rejects any pick the catalogue does not actually associate with the basket. Live, a customer request runs through five steps in strict order: the Buyer Agent matches a real product, the Merchant Agent asks the Decision Core for an offer, the Sales Copy LLM turns an already-decided offer into one sentence, the Gate (plain Python, not a model call) waits for accept or decline, and the Checkout Agent creates the order. Payment runs through Razorpay’s own official MCP server. Every step writes to a single append-only Audit Log, which the Dashboard reads live alongside the separate offline experiment that only ever feeds its Aggregate tab.
+
 ## How to run it
 
 ### Requirements
