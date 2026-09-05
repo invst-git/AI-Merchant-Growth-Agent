@@ -163,8 +163,3 @@ The dashboard's Aggregate tab compares the agent's decisions against a plain con
 ## Further reading
 
 - `docs/objective_function.md`: the exact formula used to score every offer, and why.
-- `docs/audit_schema.md`: what gets logged for each transaction.
-- `docs/data_dictionary.md`: what is in the dataset, and how it was cleaned.
-- `docs/phase5_results.md`: the full offline experiment, method and results.
-- `docs/demo_script.md`: a scripted walkthrough for a live demo.
-- `mcp/README.md`: notes on the Razorpay MCP server connection.
