@@ -1,0 +1,39 @@
+name = "med-reminder"
+main = "src/index.ts"
+compatibility_date = "2026-09-01"
+
+# The scheduler runs every minute: it creates doses, sends due reminders,
+# repeats unacknowledged ones every nagIntervalMin and marks late ones missed.
+[triggers]
+crons = ["* * * * *"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "med-reminder"
+database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID" # from `npx wrangler d1 create med-reminder`
+migrations_dir = "migrations"
+
+[vars]
+# Your Worker's public URL (shown after the first `wrangler deploy`). Used for email ack links.
+PUBLIC_URL = "https://med-reminder.YOUR-SUBDOMAIN.workers.dev"
+GRAPH_API_BASE = "https://graph.facebook.com/v23.0"
+WHATSAPP_TEMPLATE = "med_reminder"
+WHATSAPP_TEMPLATE_LANG = "en"
+# Optional: approved template for caregiver alerts (see README). Leave empty to skip WhatsApp caregiver alerts.
+WHATSAPP_ESCALATION_TEMPLATE = ""
+PATIENT_NAME = "Your contact"
+# Resend's shared sender only delivers to the email address your Resend account was created with.
+EMAIL_FROM = "Med Reminder <onboarding@resend.dev>"
+
+# Secrets — set with `npx wrangler secret put NAME` (never commit these):
+#   WHATSAPP_TOKEN            permanent System User access token
+#   WHATSAPP_PHONE_NUMBER_ID  the sender's phone number ID (not the phone number itself)
+#   WHATSAPP_APP_SECRET       Meta app secret, used to verify webhook signatures
+#   WHATSAPP_VERIFY_TOKEN     any random string; you paste the same one into Meta's webhook setup
+#   ACK_SECRET                any long random string; signs email ack links
+#   PATIENT_WHATSAPP          your WhatsApp number, digits only with country code, e.g. 919876543210
+#   PATIENT_EMAIL             (optional) email fallback address
+#   CAREGIVER_WHATSAPP        (optional) caregiver's number for escalations
+#   CAREGIVER_EMAIL           (optional) caregiver's email for escalations
+#   RESEND_API_KEY            (optional) enables email
+#   HEALTHCHECK_URL           (optional) healthchecks.io ping URL — alerts you if the Worker stops running

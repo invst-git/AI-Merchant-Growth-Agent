@@ -1,0 +1,22 @@
+{
+  "name": "med-reminder",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Interface-less medication reminders over WhatsApp (and email), nagging every 10 minutes until acknowledged. Runs on Cloudflare Workers + D1.",
+  "scripts": {
+    "dev": "wrangler dev --test-scheduled",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "check": "npm run typecheck && npm test",
+    "db:migrate": "wrangler d1 migrations apply med-reminder --remote",
+    "deploy": "npm run check && wrangler deploy"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261016.1",
+    "@types/node": "^22.20.5",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.7",
+    "wrangler": "^4.151.1"
+  }
+}
